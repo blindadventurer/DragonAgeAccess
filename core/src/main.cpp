@@ -4,6 +4,7 @@
 // DllMain only starts a worker thread; everything else runs there.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shlobj.h>
 #include <psapi.h>
 #include <string>
 #include <cstdio>
@@ -14,6 +15,7 @@
 #include "game.h"
 
 #pragma comment(lib, "version.lib")
+#pragma comment(lib, "shell32.lib")
 
 static std::wstring g_modDir;  // bin_ship\scripts\<MOD_NAME> (prism.dll lives here)
 
@@ -140,7 +142,63 @@ static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep) {
     return g_prevFilter ? g_prevFilter(ep) : EXCEPTION_CONTINUE_SEARCH;
 }
 
+static bool ReadFileBytes(const std::wstring& path, std::string& out) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    DWORD size = GetFileSize(h, nullptr), got = 0;
+    bool ok = size != INVALID_FILE_SIZE && size < (1u << 24);
+    if (ok) {
+        out.resize(size);
+        ok = size == 0 || (ReadFile(h, &out[0], size, &got, nullptr) && got == size);
+    }
+    CloseHandle(h);
+    return ok;
+}
+
+// The installer asked the player whether to free Page Up / Page Down from the camera
+// (the scanner's keys) before the game had ever written its key settings; a yes is
+// install.txt "freekeys=1". Here, once the game has made KeyBindings.ini, the two
+// default zoom lines (ZoomIn_1=Keyboard::Button_Next, ZoomOut_1=Keyboard::Button_Prior,
+// proven in both games) become (UNASSIGNED), with the backup
+// KeyBindings.ini.before-access. The backup marks it done: never twice, so a later
+// choice of the player in the game's options stays. Runs first thing at start,
+// HYPOTHESIS: before the game reads the file; else it counts from the next start.
+static void FreeZoomKeysOnce() {
+    std::string rec;
+    if (!ReadFileBytes(g_modDir + L"\\install.txt", rec) || rec.find("freekeys=1") == std::string::npos) return;
+    wchar_t docs[MAX_PATH] = L"";
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_PERSONAL, nullptr, 0, docs))) return;
+    std::wstring ini = std::wstring(docs) + L"\\" DOCS_DIR L"\\Settings\\KeyBindings.ini";
+    std::wstring backup = ini + L".before-access";
+    if (GetFileAttributesW(backup.c_str()) != INVALID_FILE_ATTRIBUTES) return;  // done before
+    std::string data;
+    if (!ReadFileBytes(ini, data)) { LogLine(L"keys: no KeyBindings.ini yet, Page Up / Page Down freed later"); return; }
+    const char* from[2] = {"ZoomIn_1=Keyboard::Button_Next", "ZoomOut_1=Keyboard::Button_Prior"};
+    const char* to[2] = {"ZoomIn_1=(UNASSIGNED)", "ZoomOut_1=(UNASSIGNED)"};
+    std::string out;
+    int changed = 0;
+    for (size_t pos = 0; pos < data.size();) {
+        size_t end = data.find('\n', pos);
+        size_t next = end == std::string::npos ? data.size() : end + 1;
+        std::string core = data.substr(pos, next - pos), tail;
+        while (!core.empty() && (core.back() == '\n' || core.back() == '\r')) { tail.insert(tail.begin(), core.back()); core.pop_back(); }
+        for (int i = 0; i < 2; ++i)
+            if (core == from[i]) { core = to[i]; ++changed; }
+        out += core + tail;
+        pos = next;
+    }
+    if (changed == 0) { LogLine(L"keys: Page Up / Page Down are not on the camera, nothing to free"); return; }
+    if (!CopyFileW(ini.c_str(), backup.c_str(), TRUE)) { LogLine(L"keys: backup of KeyBindings.ini FAILED"); return; }
+    HANDLE h = CreateFileW(ini.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    DWORD put = 0;
+    bool ok = h != INVALID_HANDLE_VALUE && WriteFile(h, out.data(), (DWORD)out.size(), &put, nullptr) && put == out.size();
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    LogLine(std::wstring(L"keys: freed Page Up / Page Down from the camera (") + std::to_wstring(changed) +
+            L" lines) in " + ini + (ok ? L"" : L" -- write FAILED"));
+}
+
 static DWORD WINAPI Worker(LPVOID) {
+    FreeZoomKeysOnce();  // first: the game reads its key settings early
     std::wstring exe = ModulePath(nullptr);
     LogLine(std::wstring(MOD_NAME) + L" probe loaded | bits=" + std::to_wstring(sizeof(void*) * 8) +
             L" | build=" + std::wstring(_CRT_WIDE(__DATE__) L" " _CRT_WIDE(__TIME__)) +

@@ -40,27 +40,28 @@ Dragon Age II (пройдены создание персонажа и прол�
 
 ## Установка
 
-1. В разделе Releases справа на странице скачайте установщик для своей игры:
-   - для Dragon Age: Origins: DAOAccess-Setup с номером версии, например DAOAccess-Setup-0.2.0.exe;
-   - для Dragon Age II: DA2Access-Setup с номером версии, например DA2Access-Setup-0.2.0.exe.
+Один установщик для обеих игр. Он сам скачивает последнюю версию мода из интернета, поэтому нужен интернет.
+
+1. В разделе Releases справа на странице скачайте файл DragonAgeAccess-Setup.exe.
 2. Запустите его. Windows может предупредить, что издатель неизвестен: у установщика нет платной цифровой подписи. Тогда нажмите «Подробнее», затем «Выполнить в любом случае». Потом Windows спросит разрешение на изменения: нажмите «Да». Установщику нужны права администратора, потому что игры часто стоят в Program Files.
-3. Установщик сам найдёт игру (GOG, Steam, EA app, обычная установка). Если не найдёт, откроется окно выбора папки: выберите папку игры, в которой есть папка bin_ship.
-4. Дальше установщик задаёт вопросы в обычных окнах с кнопками «Да» и «Нет». Везде можно отвечать «Да». Он:
-   - копирует файлы мода в папку игры и в папку override в Документах;
+3. Установщик сам найдёт игры (GOG, Steam, EA app, обычная установка) и спросит, для какой ставить мод. Можно выбрать одну игру, обе сразу или указать папку игры вручную.
+4. Дальше установщик задаёт вопросы в обычных окнах с кнопками. Везде можно отвечать «Да». Он:
+   - скачивает последнюю версию мода для выбранной игры;
+   - копирует файлы мода в папку игры и в папку override в Документах, а потом проверяет, что они на месте;
    - включает игре доступ к 4 ГБ памяти, иначе игра может вылетать в больших локациях (копия исходного exe сохраняется);
-   - снимает с камеры клавиши Page Up и Page Down, они нужны сканеру; колесо мыши продолжит управлять камерой (копия файла настроек сохраняется);
+   - снимает с камеры клавиши Page Up и Page Down, они нужны сканеру; колесо мыши продолжит управлять камерой (копия файла настроек сохраняется). Если игра ещё ни разу не запускалась, мод сделает это сам после её первого запуска;
    - предупреждает, если ваша версия игры ещё не проверялась с модом.
 5. Запустите игру как обычно. При запуске вы услышите «Dragon Age Access загружен» в Origins или «Dragon Age 2 Access загружен» в Dragon Age II.
 
-Если игра ещё ни разу не запускалась, файла настроек клавиш ещё нет. Тогда запустите игру один раз, закройте её и снова запустите установщик: он освободит Page Up и Page Down.
+Обновление: просто запустите тот же установщик ещё раз. Он сравнит установленную версию с последней и предложит кнопку «Обновить до версии…». Скачивать установщик заново не нужно.
 
-Обновление: скачайте новый установщик и запустите его. На вопрос «Мод уже установлен» ответьте «Да».
+Если установщик сообщит, что файлы мода пропали сразу после установки, их удалил антивирус: загрузчик модов dinput8.dll часто ошибочно считают угрозой. Добавьте папку игры в исключения антивируса и запустите установщик ещё раз.
 
 Установка вручную, без установщика: в архиве DAOAccess или DA2Access с номером версии есть папки bin_ship и override. Содержимое bin_ship скопируйте в папку bin_ship игры. Файл из override скопируйте в Документы\BioWare\Dragon Age\packages\core\override для Origins или в Документы\BioWare\Dragon Age 2\packages\core\override для Dragon Age II. Если этой папки нет, создайте её.
 
 ## Удаление
 
-Запустите установщик ещё раз и на вопрос «Мод уже установлен» ответьте «Нет». Он удалит мод и предложит вернуть исходный exe игры и клавиши камеры.
+Запустите установщик ещё раз, выберите игру и нажмите «Удалить мод». Он удалит мод и предложит вернуть исходный exe игры и клавиши камеры.
 
 Вручную: из папки bin_ship игры удалите файл dinput8.dll, файл scripts\DAOAccess.asi или scripts\DA2Access.asi и папку scripts\DAOAccess или scripts\DA2Access. Из папки override в Документах удалите daoaccess.gfx или da2access.gfx.
 
@@ -112,7 +113,7 @@ Dragon Age II (пройдены создание персонажа и прол�
 - Для сборки нужны Visual Studio с инструментами C++ для x86, Java, Python 3 и FFDec 26.5.0 (https://github.com/jindrapetrik/jpexs-decompiler), распакованный в папку vendor\ffdec-26.5.0.
 - build.ps1 собирает обе игры в папку build, по одной: build.ps1 -Game dao или -Game da2.
 - deploy.ps1 собирает и копирует мод в игру. Пути к играм записаны в начале файла.
-- make_release.ps1 -Version X собирает установщики и архивы обеих игр в папку release.
+- make_release.ps1 -Version X собирает архивы обеих игр DAOAccess-X.zip и DA2Access-X.zip и установщик DragonAgeAccess-Setup.exe в папку release. Релиз на GitHub публикуется как обычный (не «пререлиз») с тегом vX: установщик находит последнюю версию по странице последнего релиза и скачивает архив по имени.
 
 ## Лицензия
 
@@ -150,19 +151,21 @@ Both games: an object scanner with distance and direction by category (character
 
 ## Install
 
-1. From Releases, download the installer for your game: DAOAccess-Setup-<version>.exe for Origins, DA2Access-Setup-<version>.exe for Dragon Age II.
+One installer for both games; it downloads the newest mod itself, so it needs the internet.
+
+1. From Releases, download DragonAgeAccess-Setup.exe.
 2. Run it. Windows may warn about an unknown publisher (the installer has no paid code signature): choose "More info", then "Run anyway", then allow the changes (the games often sit in Program Files, so the installer needs administrator rights).
-3. The installer finds the game (GOG, Steam, EA app, plain installs) or opens a folder picker: pick the game folder that holds bin_ship.
-4. It asks Yes/No questions in standard message boxes; Yes everywhere is fine. It copies the mod into the game and into the override folder in Documents, gives the game access to 4 GB of memory (Large Address Aware; the original exe is backed up), frees Page Up and Page Down from the camera for the scanner (ZoomIn_1 / ZoomOut_1 in KeyBindings.ini; the file is backed up, the mouse wheel still zooms), and warns when your game version has not been tested.
+3. It finds the games (GOG, Steam, EA app, plain installs) and asks which one: one game, both, or a game folder chosen by hand.
+4. It asks its questions in standard dialogs with named buttons; Yes everywhere is fine. It downloads the newest mod for that game, copies it into the game and into the override folder in Documents and checks the files are there, gives the game access to 4 GB of memory (Large Address Aware; the original exe is backed up), frees Page Up and Page Down from the camera for the scanner (ZoomIn_1 / ZoomOut_1 in KeyBindings.ini; backed up, the mouse wheel still zooms; if the game was never started, the mod does it itself after the first start), and warns when your game version has not been tested.
 5. Start the game as usual. You hear "Dragon Age Access загружен" (Origins) or "Dragon Age 2 Access загружен" (Dragon Age II) at start.
 
-If the game has never been started, its key settings file does not exist yet: start the game once, close it and run the installer again. To update, run the new installer and answer Yes to "already installed".
+To update, run the same installer again: it compares the installed version with the newest and offers "Update to version ...". If it reports that mod files vanished right after installing, an antivirus removed them (the mod loader dinput8.dll is often taken for a threat by mistake): add the game folder to the antivirus exclusions and run the installer again.
 
 Manual install: the DAOAccess-<version>.zip and DA2Access-<version>.zip archives hold bin_ship and override. Copy the contents of bin_ship into the game's bin_ship, and the .gfx file from override into Documents\BioWare\Dragon Age\packages\core\override (Origins) or Documents\BioWare\Dragon Age 2\packages\core\override (Dragon Age II).
 
 ## Uninstall
 
-Run the installer again and answer No to "already installed": it removes the mod and offers to put back the original exe and camera keys. By hand: delete dinput8.dll, scripts\<Mod>.asi and the scripts\<Mod> folder from the game's bin_ship (<Mod> is DAOAccess or DA2Access), and the .gfx file from the override folder.
+Run the installer again, pick the game and choose "Remove the mod": it removes the mod and offers to put back the original exe and camera keys. By hand: delete dinput8.dll, scripts\<Mod>.asi and the scripts\<Mod> folder from the game's bin_ship (<Mod> is DAOAccess or DA2Access), and the .gfx file from the override folder.
 
 ## Keys
 
@@ -178,7 +181,7 @@ The mod writes bin_ship\scripts\DAOAccess.log (Origins) or bin_ship\scripts\DA2A
 
 core holds the shared code (core\src: speech, log, menu reader, scanner, walking, combat; core\agent: the Flash agent that runs inside the game's menus; core\installer: the installer). games\dao and games\da2 hold what differs per game: game.h (names, folders, proven builds), src (the GFx layer of that game's Scaleform version, world objects and walking at that exe's addresses), NOTEBOOK.md (that game's working log) and tools (Python scripts that study that game's exe and files). The root NOTEBOOK.md holds the shared decisions.
 
-Building needs Visual Studio with the x86 C++ tools, Java, Python 3 and FFDec 26.5.0 extracted to vendor\ffdec-26.5.0. build.ps1 builds both games into build (or one: -Game dao / -Game da2), deploy.ps1 builds and copies into the games (paths at the top), make_release.ps1 -Version X makes both installers and archives in release.
+Building needs Visual Studio with the x86 C++ tools, Java, Python 3 and FFDec 26.5.0 extracted to vendor\ffdec-26.5.0. build.ps1 builds both games into build (or one: -Game dao / -Game da2), deploy.ps1 builds and copies into the games (paths at the top), make_release.ps1 -Version X makes DAOAccess-X.zip, DA2Access-X.zip and DragonAgeAccess-Setup.exe in release. Publish the GitHub release as a normal release (not a prerelease) tagged vX: the installer finds the newest version through the latest-release page and downloads the zip by name.
 
 ## Licence
 

@@ -1,9 +1,10 @@
 # Builds both mods and packs the release files into release\:
-#   <Mod>-Setup-<version>.exe  the installer (every file inside, core\installer\setup.cpp)
-#   <Mod>-<version>.zip        the same files for a manual install, plus the installer:
+#   <Mod>-<version>.zip  for DAOAccess (Origins) and DA2Access (Dragon Age II):
 #     bin_ship  - extract into the game's bin_ship folder (loader, mod, speech library)
 #     override  - the Flash agent for Documents\BioWare\<game>\packages\core\override
-# for DAOAccess (Origins) and DA2Access (Dragon Age II).
+#   DragonAgeAccess-Setup.exe  the one installer; it downloads the newest <Mod>-*.zip
+#     from the GitHub releases itself, so it only changes with setup.cpp.
+# Upload all three to the GitHub release vX (the installer finds the zips by name).
 # Usage: .\make_release.ps1 -Version X [-Game dao|da2|all]
 param([Parameter(Mandatory = $true)][string]$Version, [string]$Game = 'all')
 $ErrorActionPreference = 'Stop'
@@ -35,19 +36,18 @@ foreach ($g in Select-Games $Game) {
         New-Item -ItemType Directory -Force (Split-Path $f.To) | Out-Null
         Copy-Item $f.From $f.To -Force
     }
-    # The installer: one exe with every file of bin_ship and override inside.
-    $setupName = "$mod-Setup-$Version.exe"
-    $setup = "$root\release\$setupName"
-    & "$root\core\installer\build_setup.ps1" -Game $g -Stage $stage -Version $Version -ModName $mod -OutExe $setup
-    Copy-Item $setup "$stage\$setupName" -Force
     $zip = "$root\release\$mod-$Version.zip"
     if (Test-Path $zip) { Remove-Item -Force $zip }
     # tar.exe (Windows 10+) writes zip entries with forward slashes; Compress-Archive of
     # PowerShell 5.1 writes backslashes, which some extractors do not take as folders.
-    & "$env:SystemRoot\System32\tar.exe" -a -c -f $zip -C $stage $setupName bin_ship override README.md
+    & "$env:SystemRoot\System32\tar.exe" -a -c -f $zip -C $stage bin_ship override README.md
     if ($LASTEXITCODE -ne 0) { throw "packing failed ($LASTEXITCODE)" }
     Write-Host "Release $zip"
     Write-Host "SHA-256 $((Get-FileHash $zip -Algorithm SHA256).Hash)"
-    Write-Host "Installer $setup"
-    Write-Host "SHA-256 $((Get-FileHash $setup -Algorithm SHA256).Hash)"
 }
+
+# The one installer for both games (no mod files inside).
+$setup = "$root\release\DragonAgeAccess-Setup.exe"
+& "$root\core\installer\build_setup.ps1" -OutExe $setup
+Write-Host "Installer $setup"
+Write-Host "SHA-256 $((Get-FileHash $setup -Algorithm SHA256).Hash)"
