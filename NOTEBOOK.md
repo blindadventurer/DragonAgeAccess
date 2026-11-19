@@ -55,8 +55,15 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   - Both, new 2026-11-20: FreeZoomKeysOnce at start (main.cpp); with install.txt
     freekeys=1 and no KeyBindings.ini.before-access it frees ZoomIn_1 / ZoomOut_1 once
     (log "keys: ..."). Not yet seen in a game.
-- Release 0.2.0 built (both zips, the one installer), not published yet: the player
-  decided to publish after the merge, from the new repository.
+- Published 2026-11-20: https://github.com/blindadventurer/DragonAgeAccess (public,
+  branch main) and the normal release v0.2.0 (title "тестовая версия") with
+  DragonAgeAccess-Setup.exe, DAOAccess-0.2.0.zip, DA2Access-0.2.0.zip (player's choice:
+  publish, then test, since the installer needs a release to download). Proven the
+  same night: the test build found v0.2.0 through releases/latest and downloaded and
+  unpacked both zips (/check:DAOAccess, /check:DA2Access). Waiting for the player's
+  test of the installer with NVDA and of both games. After it passes: archive
+  blindadventurer/DragonAgeOriginsAccess and blindadventurer/DragonAge2Access with a
+  link to the new repository (README note, then gh repo archive).
 
 ## Decisions
 
