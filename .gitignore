@@ -1,0 +1,15 @@
+# Build output and release packages
+build/
+release/
+# Extracts of the games' archives, movies and exe analysis: game data, not ours to publish
+games/*/work/
+# Edited copies of the game's own tables (player tweaks, not part of the mod)
+games/dao/tools/*.gda
+games/dao/tools/random_encounters_always/
+# Third-party tools and archives kept locally (the build uses lib/ and vendor/ual-9.7.4/dinput8.dll)
+vendor/ffdec-*/
+vendor/*.zip
+vendor/ual-9.7.4/*.zip
+# Python caches
+__pycache__/
+*.pyc
