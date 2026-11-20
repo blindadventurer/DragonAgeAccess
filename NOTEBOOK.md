@@ -57,7 +57,10 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   DA2Access-0.3.0.zip with agent v35 and everything under Status above, global.ini
   in the Dragon Age II zip. Released while the agent v33-v35 changes were still
   untested in a game (player's choice: testers and the player test the release).
-  Next: fixes from tester reports and the player's play.
+  Published as a normal release (commit 3df691d, title "0.3.0 (тестовая
+  версия)"); proven the same evening: the installer test build found v0.3.0 through
+  releases/latest and downloaded and unpacked both zips (/check:DAOAccess,
+  /check:DA2Access). Next: fixes from tester reports and the player's play.
 - 2026-11-20: the player switched both games to Steam (F:\SteamLibrary; the old GOG
   Origins and the old Dragon Age II folders in F:\games are deleted, together with
   the mod files in them). Both Steam exes are the same builds (same PE stamp) wrapped
