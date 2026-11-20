@@ -52,7 +52,7 @@ Dragon Age: Origins:
 ```
 
 - В Steam-версии нет русского текста. Русский перевод делает команда ENPY: https://enpy.net/projects/localizations/games/dragon_age_origins/
-- Установщик не включает Steam-версии доступ к 4 ГБ памяти: файл игры защищён Steam, и после изменения игра может перестать запускаться. Без этого в больших локациях игра может вылетать.
+- Доступ к 4 ГБ памяти: файл игры в Steam защищён, и если просто включить в нём 4 ГБ, игра перестаёт запускаться. Поэтому установщик спросит, скачать ли программу Steamless 3.1.0.5 (автор atom0s) с её страницы на GitHub. Если согласиться, он снимет ею защиту с копии файла игры, включит в копии 4 ГБ и поставит её вместо исходного файла, а исходный сохранит рядом как DAOrigins.exe.before-laa. Каждый шаг проверяется по контрольным суммам, и в игру попадает только проверенный файл. Если Steam обновит игру или проверит её файлы, он вернёт защищённый файл: тогда запустите установщик ещё раз.
 
 Dragon Age II:
 
@@ -68,7 +68,7 @@ Dragon Age II:
 4. Дальше установщик задаёт вопросы в обычных окнах с кнопками. Везде можно отвечать «Да». Он:
    - скачивает последнюю версию мода для выбранной игры;
    - копирует файлы мода в папку игры и в папку override в Документах, а потом проверяет, что они на месте;
-   - включает игре доступ к 4 ГБ памяти, иначе игра может вылетать в больших локациях (копия исходного exe сохраняется). Для версий из Steam и EA app этого не делает, см. выше;
+   - включает игре доступ к 4 ГБ памяти, иначе игра может вылетать в больших локациях (копия исходного exe сохраняется). Для Origins из Steam это делается через Steamless, см. выше; для Dragon Age II из Steam и EA app 4 ГБ не включаются;
    - снимает с камеры клавиши Page Up и Page Down, они нужны сканеру; колесо мыши продолжит управлять камерой (копия файла настроек сохраняется). Если игра ещё ни разу не запускалась, мод сделает это сам после её первого запуска;
    - предупреждает, если ваша версия игры ещё не проверялась с модом.
 5. Запустите игру как обычно. При запуске вы услышите «Dragon Age Access загружен» в Origins или «Dragon Age 2 Access загружен» в Dragon Age II.
@@ -178,7 +178,7 @@ Both games: an object scanner with distance and direction by category (character
 ```
 
 - Origins on Steam has no Russian text; the ENPY team makes the Russian translation: https://enpy.net/projects/localizations/games/dragon_age_origins/
-- The installer does not give Steam or EA app copies the 4 GB memory flag: their exe is protected by the store and may stop starting once changed.
+- 4 GB of memory: the Steam exe is protected, and setting the flag on it alone stops the game from starting. For Origins from Steam the installer offers to download Steamless 3.1.0.5 (by atom0s) from its GitHub release, unwrap a copy of the exe, set the flag in the copy and put it in place, keeping the original as DAOrigins.exe.before-laa; every step is checked by SHA-256 and only the proven file reaches the game. If Steam updates or verifies the game, it brings the protected file back: run the installer again. Dragon Age II from Steam or the EA app gets no 4 GB flag.
 - Dragon Age II runs through the EA app; sign in to your EA account on the in-game sign-in screen (the mod reads it, and never speaks or logs the password) to enable the DLC.
 
 ## Install

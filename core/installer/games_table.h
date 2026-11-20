@@ -19,6 +19,7 @@ struct GameInfo {
     std::vector<std::wstring> processes;
     std::vector<GameBuild> builds;
     std::vector<GameReg> regs;
+    std::string unwrapFrom, unwrapResult;  // SHA-256 of the Steam exe and of its 4 GB copy
 };
 
 #define GAME_INFO_BODY(keyText)                                                    \
@@ -35,7 +36,9 @@ struct GameInfo {
         for (const wchar_t* p : kProcesses) g.processes.push_back(p);              \
         for (const auto& b : kProvenBuilds) g.builds.push_back({b.ts, b.size, b.name}); \
         for (const auto& r : kRegPaths) g.regs.push_back({r.key, r.value});        \
-        return g;                                                                  \
+        if (kSteamUnwrap.wrappedSha) g.unwrapFrom = kSteamUnwrap.wrappedSha;       \
+        if (kSteamUnwrap.resultSha) g.unwrapResult = kSteamUnwrap.resultSha;       \
+        return g;                                                                \
     }
 
 namespace dao_game {

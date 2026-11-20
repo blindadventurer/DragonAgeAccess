@@ -1210,6 +1210,8 @@ Changed:
   Steam original is bin_ship\DAOrigins.exe.before-laa (SHA-256 400c2c9e...47bd).
   Undo: copy it back, or Steam "Verify integrity of game files"; a Steam update
   also brings the wrapped exe back (the mod still works, only 2 GB again).
+  Since installer 1.2 the installer makes this same file (byte for byte, SHA-256
+  b74dca7a...8f45) for any Steam player who agrees: root NOTEBOOK.md, Decisions, LAA.
   Proven 2026-11-20 13:43: it starts from the Steam launch option, the mod loads,
   memory line "used 1973 of 4095 MB address space, largest free 2046 MB".
 

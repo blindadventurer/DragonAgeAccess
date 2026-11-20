@@ -7,7 +7,8 @@
 // Steps: finds both games and asks which one (or both, or a folder by hand); waits
 // while the game runs; downloads and unpacks the release (tar.exe); warns when the
 // game exe is not a proven build; replaces a foreign dinput8.dll only with consent;
-// copies the files; offers the 4 GB memory flag (Large Address Aware) and freeing
+// copies the files; offers the 4 GB memory flag (Large Address Aware; for the Steam
+// Origins exe through Steamless, SteamUnwrapWork) and freeing
 // Page Up / Page Down from the camera; writes bin_ship\scripts\<Mod>\install.txt
 // (version, files, loader hash) for later updates and removal.
 //
@@ -38,7 +39,7 @@
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' " \
                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-static const wchar_t kSetupVersion[] = L"1.1";
+static const wchar_t kSetupVersion[] = L"1.2";
 static const wchar_t kDefaultRepo[] = L"blindadventurer/DragonAgeAccess";
 // Ultimate ASI Loader 9.7.4 x86 dinput8.dll (NOTEBOOK.md): recognised as ours when an
 // older install has no install.txt.
@@ -401,25 +402,33 @@ static bool HttpGet(const std::wstring& url, std::string& body, std::wstring& er
 // A release ready to install: dir holds bin_ship\ and override\.
 struct Package { std::wstring dir, version, source; };
 
-static bool Unzip(const std::wstring& zip, const std::wstring& dir, std::wstring& err) {
-    DeleteTree(dir);
-    MakeDirs(dir);
-    std::wstring cmd = L"\"" + Env(L"SystemRoot") + L"\\System32\\tar.exe\" -x -f \"" + zip + L"\" -C \"" + dir + L"\"";
+// Runs a command line without a window and waits for it; false when it could not
+// start, ran past the timeout (then it is ended) or exited with a code other than 0.
+static bool RunHidden(std::wstring cmd, const std::wstring& cwd, DWORD timeoutMs, const wchar_t* name, std::wstring& err) {
     STARTUPINFOW si = {sizeof si};
     si.dwFlags = STARTF_USESHOWWINDOW;
     si.wShowWindow = SW_HIDE;
     PROCESS_INFORMATION pi = {};
-    if (!CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-        err = L"tar.exe " + ErrText(GetLastError());
+    if (!CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr,
+                        cwd.empty() ? nullptr : cwd.c_str(), &si, &pi)) {
+        err = std::wstring(name) + L" " + ErrText(GetLastError());
         return false;
     }
-    WaitForSingleObject(pi.hProcess, 120000);
+    if (WaitForSingleObject(pi.hProcess, timeoutMs) == WAIT_TIMEOUT) TerminateProcess(pi.hProcess, 1);
     DWORD code = 1;
     GetExitCodeProcess(pi.hProcess, &code);
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
-    if (code != 0) { err = L"tar.exe exit " + std::to_wstring(code); return false; }
+    Log(std::wstring(name) + L" exit " + std::to_wstring(code));
+    if (code != 0) { err = std::wstring(name) + L" exit " + std::to_wstring(code); return false; }
     return true;
+}
+
+static bool Unzip(const std::wstring& zip, const std::wstring& dir, std::wstring& err) {
+    DeleteTree(dir);
+    MakeDirs(dir);
+    std::wstring cmd = L"\"" + Env(L"SystemRoot") + L"\\System32\\tar.exe\" -x -f \"" + zip + L"\" -C \"" + dir + L"\"";
+    return RunHidden(cmd, L"", 120000, L"tar.exe", err);
 }
 
 static std::wstring WorkDir() {
@@ -586,6 +595,73 @@ static bool SetLaa(const std::wstring& exe, std::wstring& err) {
     if (!Backup(exe, exe + L".before-laa")) { err = T(L"не удалось сделать копию exe", L"could not back up the exe"); return false; }
     if (!WriteAll(exe, data.data(), data.size(), err)) return false;
     Log(L"LAA set, checksum " + Hex(sum));
+    return true;
+}
+
+// Steam Origins: the exe is wrapped by SteamStub, so the LAA flag alone stops it
+// starting. Steamless 3.1.0.5 (github.com/atom0s/Steamless, licence CC BY-NC-ND 4.0:
+// downloaded from its own release on the player's PC, never shipped by us) unwraps a
+// copy; then, as games\dao\tools\make_laa_exe.py does, the security directory that
+// points past the end of the unwrapped file is cleared, LAA is set and the checksum
+// written. Every step is checked by SHA-256: the Steamless zip, the Steam exe
+// (GameInfo.unwrapFrom) and the result (GameInfo.unwrapResult); a result with
+// another hash is never written over the game. Proven 2026-11-20: Steamless gives
+// the same unwrapped file on every run (df7af157...e186).
+static const wchar_t kSteamlessUrl[] =
+    L"https://github.com/atom0s/Steamless/releases/download/v3.1.0.5/Steamless.v3.1.0.5.-.by.atom0s.zip";
+static const char kSteamlessSha256[] = "e3e2d22e098ff3fb359b2876aa2bed9596f0501e6ff588cbffae90a76d2dc4f5";
+
+struct UnwrapJob { const GameInfo* game; std::wstring exe; std::string result; std::wstring err; };
+
+static bool SteamUnwrapWork(void* p) {
+    auto* job = (UnwrapJob*)p;
+    std::string zipData;
+    if (!HttpGet(kSteamlessUrl, zipData, job->err)) return false;
+    if (Sha256(zipData) != kSteamlessSha256) {
+        Log(L"Steamless zip SHA-256 " + Widen(Sha256(zipData)));
+        job->err = T(L"скачанный Steamless отличается от проверенного", L"the downloaded Steamless differs from the proven one");
+        return false;
+    }
+    std::wstring zip = WorkDir() + L"\\steamless.zip", tool = WorkDir() + L"\\steamless", work = WorkDir() + L"\\unwrap";
+    if (!WriteAll(zip, zipData.data(), zipData.size(), job->err)) return false;
+    if (!Unzip(zip, tool, job->err)) return false;
+    std::wstring cli = tool + L"\\Steamless.CLI.exe";
+    if (!FileExists(cli)) { job->err = T(L"в архиве Steamless нет Steamless.CLI.exe", L"the Steamless zip has no Steamless.CLI.exe"); return false; }
+    DeleteTree(work);
+    MakeDirs(work);
+    std::wstring copy = work + L"\\" + FileName(job->exe);
+    if (!CopyFileW(job->exe.c_str(), copy.c_str(), FALSE)) { job->err = ErrText(GetLastError()); return false; }
+    // Steamless writes <file>.unpacked.exe next to the file; exit 0 on success.
+    if (!RunHidden(L"\"" + cli + L"\" --quiet \"" + copy + L"\"", tool, 300000, L"Steamless", job->err)) return false;
+    std::string& data = job->result;
+    if (!ReadAll(copy + L".unpacked.exe", data) || data.size() < 0x400) {
+        job->err = T(L"Steamless не создал файл", L"Steamless made no file");
+        return false;
+    }
+    DWORD off = *(DWORD*)(data.data() + 0x3C);
+    if (off + sizeof(IMAGE_NT_HEADERS32) > data.size()) { job->err = L"bad PE"; return false; }
+    auto* nt = (IMAGE_NT_HEADERS32*)(&data[0] + off);
+    IMAGE_DATA_DIRECTORY& sec = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY];
+    if (sec.VirtualAddress && (unsigned long long)sec.VirtualAddress + sec.Size > data.size()) {
+        Log(L"security directory past the end cleared: " + Hex(sec.VirtualAddress) + L"+" + Hex(sec.Size));
+        sec.VirtualAddress = 0;
+        sec.Size = 0;
+    }
+    nt->FileHeader.Characteristics |= IMAGE_FILE_LARGE_ADDRESS_AWARE;
+    nt->OptionalHeader.CheckSum = 0;
+    DWORD headerSum = 0, sum = 0;
+    if (!CheckSumMappedFile(&data[0], (DWORD)data.size(), &headerSum, &sum)) {
+        job->err = L"CheckSumMappedFile " + ErrText(GetLastError());
+        return false;
+    }
+    nt->OptionalHeader.CheckSum = sum;
+    std::string got = Sha256(data);
+    Log(L"unwrapped + LAA: " + std::to_wstring(data.size()) + L" bytes, checksum " + Hex(sum) + L", SHA-256 " + Widen(got));
+    DeleteTree(work);
+    if (got != job->game->unwrapResult) {
+        job->err = T(L"результат отличается от проверенного файла, игра не изменена", L"the result differs from the proven file, the game is unchanged");
+        return false;
+    }
     return true;
 }
 
@@ -905,6 +981,41 @@ static std::wstring Install(const GameInfo& g, const Paths& p, const Package& pk
     // 4 GB memory flag.
     if (pe.ok && (pe.chars & IMAGE_FILE_LARGE_ADDRESS_AWARE)) {
         report += T(L"\n- доступ к 4 ГБ памяти уже был включён", L"\n- 4 GB of memory was already on");
+    } else if (pe.ok && pe.wrapped && !g.unwrapFrom.empty() && FileSha256(p.exe) == g.unwrapFrom) {
+        int r = Ask(g.title + T(L" из Steam: включить игре доступ к 4 ГБ памяти?\n\nБез этого игра работает у предела в 2 ГБ и может вылетать в больших локациях. Файл игры ",
+                                L" from Steam: give the game access to 4 GB of memory?\n\nWithout it the game runs at its 2 GB limit and may crash in large areas. The game file ") +
+                        g.exe + T(L" защищён Steam, поэтому установщик скачает с GitHub программу Steamless 3.1.0.5 (автор atom0s), снимет ею защиту с копии файла и включит в копии 4 ГБ. С таким файлом игра проверена и запускается из Steam. Исходный файл сохранится рядом как ",
+                                  L" is protected by Steam, so the installer downloads Steamless 3.1.0.5 (by atom0s) from GitHub, removes the protection from a copy of the file and turns 4 GB on in the copy. The game is proven to start from Steam with that file. The original is kept next to it as ") +
+                        g.exe + T(L".before-laa.\n\nЕсли Steam обновит игру или проверит её файлы, он вернёт защищённый файл. Тогда запустите установщик ещё раз.",
+                                  L".before-laa.\n\nIf Steam updates the game or verifies its files, it puts the protected file back; then run the installer again."),
+                    MB_YESNO | MB_ICONQUESTION, IDYES);
+        if (r == IDYES) {
+            UnwrapJob job;
+            job.game = &g;
+            job.exe = p.exe;
+            bool done = RunBusy(T(L"Скачиваю Steamless и готовлю файл игры с доступом к 4 ГБ памяти...",
+                                  L"Downloading Steamless and preparing the game file with 4 GB of memory..."),
+                                SteamUnwrapWork, &job);
+            if (done && !Backup(p.exe, p.exe + L".before-laa")) {
+                done = false;
+                job.err = T(L"не удалось сделать копию исходного файла игры", L"could not back up the original game file");
+            }
+            if (done && !WriteAll(p.exe, job.result.data(), job.result.size(), job.err)) done = false;
+            if (done && FileSha256(p.exe) != g.unwrapResult) {
+                done = false;
+                job.err = T(L"файл игры не записался как надо, верните исходный из ", L"the game file was not written as expected; put back the original from ") +
+                          g.exe + L".before-laa";
+            }
+            if (done) {
+                Log(L"Steam exe unwrapped, LAA set");
+                report += T(L"\n- доступ к 4 ГБ памяти включён (защита Steam снята с файла игры, исходный файл сохранён)",
+                            L"\n- 4 GB of memory is on (Steam's protection removed from the game file, the original kept)");
+            } else {
+                if (job.err.empty()) job.err = T(L"отменено", L"cancelled");
+                Log(L"Steam unwrap FAILED: " + job.err);
+                report += T(L"\n- не удалось включить доступ к 4 ГБ памяти: ", L"\n- could not turn on 4 GB of memory: ") + job.err;
+            }
+        } else report += T(L"\n- доступ к 4 ГБ памяти не включён", L"\n- 4 GB of memory left off");
     } else if (pe.ok && pe.wrapped) {
         Log(L"LAA not offered: the exe is wrapped by a DRM stub");
         report += T(L"\n- доступ к 4 ГБ памяти не включён: файл игры защищён магазином (Steam или EA), после изменения игра может не запуститься",
@@ -990,9 +1101,12 @@ static std::wstring Uninstall(const GameInfo& g, const Paths& p) {
     std::wstring backupExe = p.exe + L".before-laa", err;
     bool exeBack = FileExists(backupExe);
     if (exeBack) {
-        // Only a backup of the same build goes back (after a game update it would be older).
+        // Only a backup of the same build goes back (after a game update it would be older);
+        // the Steam exe also goes back over the copy unwrapped from it (SteamUnwrapWork).
         PeInfo now = ReadPe(p.exe), old = ReadPe(backupExe);
         exeBack = now.ok && old.ok && now.ts == old.ts && now.size == old.size;
+        if (!exeBack && now.ok && old.ok && now.ts == old.ts && !g.unwrapFrom.empty())
+            exeBack = FileSha256(backupExe) == g.unwrapFrom && FileSha256(p.exe) == g.unwrapResult;
         if (!exeBack) Log(L"exe backup is another build, kept as it is");
     }
     bool keysBack = FileExists(p.keys) && ZoomKeys(p.keys, false, false, err) > 0;

@@ -30,6 +30,17 @@ static const ProvenBuild kProvenBuilds[] = {
     {0x4eb19d53, 0xa49000, L"DAOrigins.exe 1.05.13263.0 (Steam)"},
     {0x4eb19d53, 0x9ed000, L"DAOrigins.exe 1.05.13263.0 (Steam, Steamless)"}};
 
+// The Steam exe the installer may unwrap to give it the 4 GB flag (core\installer
+// setup.cpp SteamUnwrapWork): SHA-256 of DAOrigins.exe as Steam ships it, and of the
+// result of Steamless 3.1.0.5 + security directory cleared + LAA + checksum, i.e.
+// what games\dao\tools\make_laa_exe.py made (NOTEBOOK.md, Game folder changes; the
+// result proven in the game 2026-11-20 13:43). Both hashes read from the player's
+// files 2026-11-20. Nothing else is ever written over the exe.
+struct SteamUnwrap { const char* wrappedSha; const char* resultSha; };
+static const SteamUnwrap kSteamUnwrap = {
+    "400c2c9e97bb1a534121553be66f202429ef6f7320c93c86f9b7a491864647bd",
+    "b74dca7a1b1b69f9242d94afb47b2f67e8c655df89914352cca7d31f76dd8f45"};
+
 // HKLM keys (32-bit view) with the install folder. GOG games are found through the
 // GOG registry keys in the installer (proven on the player's PC). This BioWare key is
 // a HYPOTHESIS (the Dragon Age 2 installer writes BioWare\Dragon Age 2\Path); a key

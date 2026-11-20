@@ -55,7 +55,9 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   установщик ... запушить, дальше дорабатывать по отзывам тестировщиков"): installer
   1.1 (Steam builds proven, no LAA on wrapped exes), DAOAccess-0.3.0.zip and
   DA2Access-0.3.0.zip with agent v35 and everything under Status above, global.ini
-  in the Dragon Age II zip. Released while the agent v33-v35 changes were still
+  in the Dragon Age II zip. The same evening the installer asset of v0.3.0 was
+  replaced by installer 1.2 (Steam Origins 4 GB through Steamless; the mod zips
+  unchanged, so no new mod version). Released while the agent v33-v35 changes were still
   untested in a game (player's choice: testers and the player test the release).
   Published as a normal release (commit 3df691d, title "0.3.0 (тестовая
   версия)"); proven the same evening: the installer test build found v0.3.0 through
@@ -141,7 +143,7 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   проверяет GitHub и обновляет мод"): one installer for both games,
   core\installer\setup.cpp (games_table.h takes both games' names from their game.h),
   built by build_setup.ps1 into DragonAgeAccess-Setup.exe (installer version
-  kSetupVersion, 1.1 since release v0.3.0). It holds no mod files and is rebuilt only when its code
+  kSetupVersion, 1.2 since 2026-11-20 evening). It holds no mod files and is rebuilt only when its code
   changes. Steps: finds both games (installer folder, HKLM BioWare keys, GOG keys,
   Steam libraries, EA / Origin / GOG default folders) and asks in a task dialog with
   named command buttons: each game (with its folder or "not found"), both, or a
@@ -171,8 +173,16 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   on disk, and players report Steam Origins no longer starting (error code 51) after
   the 4GB patch (Steam community / Nexus posts found 2026-11-20). For Origins on
   the player's PC the exe was unwrapped with Steamless and given LAA by hand
-  (games\dao\tools\make_laa_exe.py, games\dao\NOTEBOOK.md Game folder changes); the
-  installer does not do this.
+  (games\dao\tools\make_laa_exe.py, games\dao\NOTEBOOK.md Game folder changes). Since
+  installer 1.2 (2026-11-20 evening, player: "Сделать сейчас") the installer does
+  the same for the Steam Origins exe, with a question: setup.cpp SteamUnwrapWork
+  downloads Steamless 3.1.0.5 from its GitHub release (zip SHA-256 pinned,
+  kSteamlessSha256; CC BY-NC-ND, so never shipped by us), unwraps a copy with
+  Steamless.CLI.exe --quiet, clears the security directory past the end, sets LAA
+  and the checksum, and writes it only when its SHA-256 is the proven one
+  (kSteamUnwrap in games\dao\game.h: Steam exe 400c2c9e...47bd, result
+  b74dca7a...8f45); the original stays as .before-laa and removal puts it back.
+  Any other wrapped exe (Dragon Age II, a changed Steam build) gets no LAA.
 - 2026-11-20 (after a password reached the log): what is typed into input fields is
   never logged. SpeakPrivate (speech.cpp) speaks but logs "<скрыто>"; item lines of
   a non-empty "edit" field log "<скрыто>"; edit start / text / end log only the
@@ -185,7 +195,8 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   Origins too (character name, save name).
 - 2026-11-20 (player), for the next release, in this order: (1) Dragon Age II
   level-up made accessible (attribute points, abilities; "Авто. уровень" is the
-  stopgap); (2) installer, Origins on Steam, each with a question: 4 GB memory by
+  stopgap); (2) installer, Origins on Steam, each with a question: 4 GB memory (DONE
+  in installer 1.2, see the LAA decision above) by
   downloading Steamless 3.1.0.5 from github.com/atom0s/Steamless (pinned version and
   SHA-256; CC BY-NC-ND, so never shipped by us) to unwrap a copy of the exe on the
   player's PC, then LAA (as games\dao\tools\make_laa_exe.py), original kept as
@@ -294,3 +305,10 @@ One line per test of the shared parts; in-game tests go in the game's notebook.
   question (Steam build now proven), global.ini copied, LAA not offered, freekeys
   recorded. The Origins run stopped at "game running: DAOrigins.exe" (the player
   was playing): the running-game check works; the Origins copy was not installed.
+- 2026-11-20 ~20:10 (Claude, scratch folder): installer 1.2 test build on a copy of
+  the Steam DAOrigins.exe (from .before-laa): real download of Steamless 3.1.0.5
+  (610 646 bytes, hash as pinned), Steamless exit 0, security directory
+  0xa19000+0x1760 cleared, result 10 217 312 bytes, SHA-256 b74dca7a...8f45 = the
+  exe proven in the game; report "4 ГБ включён". Second run: "уже был включён".
+  /uninstall: Steam exe restored byte for byte (400c2c9e...47bd). Dragon Age II
+  copy: LAA not offered, as before. All as expected.
