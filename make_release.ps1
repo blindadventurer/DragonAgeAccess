@@ -35,6 +35,9 @@ foreach ($g in Select-Games $Game) {
     # Loader settings a game needs (games\<game>\loader\global.ini, Dragon Age II only).
     $ini = "$root\games\$g\loader\global.ini"
     if (Test-Path $ini) { $files += @{ From = $ini; To = "$bin\scripts\global.ini" } }
+    # Exit watcher (Dragon Age II only, see build.ps1).
+    $watch = "$root\build\$g\$($mod)Watch.exe"
+    if (Test-Path $watch) { $files += @{ From = $watch; To = "$data\$($mod)Watch.exe" } }
     foreach ($f in $files) {
         New-Item -ItemType Directory -Force (Split-Path $f.To) | Out-Null
         Copy-Item $f.From $f.To -Force

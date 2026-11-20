@@ -39,6 +39,9 @@ foreach ($g in $selected) {
     # Loader settings a game needs (games\<game>\loader\global.ini, Dragon Age II only).
     $ini = "$root\games\$g\loader\global.ini"
     if (Test-Path $ini) { $files += @{ From = $ini; To = "$game\scripts\global.ini" } }
+    # Exit watcher (Dragon Age II only, see build.ps1).
+    $watch = "$root\build\$g\$($mod)Watch.exe"
+    if (Test-Path $watch) { $files += @{ From = $watch; To = "$game\scripts\$mod\$($mod)Watch.exe" } }
     foreach ($f in $files) {
         New-Item -ItemType Directory -Force (Split-Path $f.To) | Out-Null
         if ((Test-Path $f.To) -and ($f.To -like '*\dinput8.dll')) {

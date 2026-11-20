@@ -197,6 +197,29 @@ static void FreeZoomKeysOnce() {
             L" lines) in " + ini + (ok ? L"" : L" -- write FAILED"));
 }
 
+#ifdef CLOSE_AFTER_EXIT_DELAY
+// Starts <Mod>Watch.exe (core\watcher), which closes the programs of kCloseAfterExit
+// (game.h) CLOSE_AFTER_EXIT_DELAY seconds after this game process ends. It runs
+// outside the game, so it breaks away from a job the launcher may have put the game in.
+static void StartExitWatcher() {
+    std::wstring exe = g_modDir + L"\\" MOD_NAME L"Watch.exe";
+    if (GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES) { LogLine(L"exit watch: " + exe + L" missing"); return; }
+    std::wstring names, cmd = L"\"" + exe + L"\" " + std::to_wstring(GetCurrentProcessId()) + L" " +
+                              std::to_wstring(CLOSE_AFTER_EXIT_DELAY) + L" \"" + LogPath() + L"\" " GAME_EXE;
+    for (const wchar_t* n : kCloseAfterExit) { cmd += std::wstring(L" ") + n; names += std::wstring(L" ") + n; }
+    STARTUPINFOW si = {sizeof si};
+    PROCESS_INFORMATION pi = {};
+    DWORD flags = CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB;
+    BOOL ok = CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, flags, nullptr, g_modDir.c_str(), &si, &pi);
+    if (!ok) ok = CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, g_modDir.c_str(), &si, &pi);
+    if (!ok) { LogLine(L"exit watch: start FAILED, error " + std::to_wstring(GetLastError())); return; }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    LogLine(L"exit watch: started (pid " + std::to_wstring(pi.dwProcessId) + L"), closes" + names + L" " +
+            std::to_wstring(CLOSE_AFTER_EXIT_DELAY) + L" s after the game exits");
+}
+#endif
+
 static DWORD WINAPI Worker(LPVOID) {
     FreeZoomKeysOnce();  // first: the game reads its key settings early
     std::wstring exe = ModulePath(nullptr);
@@ -206,6 +229,9 @@ static DWORD WINAPI Worker(LPVOID) {
             L" | exe=" + exe + L" (" + FileVersion(exe) + L", " + ExeStamp() + L")");
     LogLine(L"cmdline: " + std::wstring(GetCommandLineW()));
     LogLine(L"loader: " + LoadedModuleInfo(L"dinput8.dll"));
+#ifdef CLOSE_AFTER_EXIT_DELAY
+    StartExitWatcher();
+#endif
 
     SpeechStart(g_modDir);
     Speak(START_PHRASE L".", true);

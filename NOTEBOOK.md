@@ -18,6 +18,8 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   - core\agent\daoaccess.as: the Flash agent (AS2), the same for both games; its
     global is still called DAOAccess in both.
   - core\installer: setup.cpp and build_setup.ps1 (the installer).
+  - core\watcher\watcher.cpp: <Mod>Watch.exe, closes programs left behind after the
+    game exits (Dragon Age II: the EA app; games\da2\NOTEBOOK.md, Decisions).
   - games\<game>\game.h: names, folders, process names, proven builds, registry keys;
     read by the mod and the installer. Origins also sets PARTY_PICKER_LIST.
   - games\<game>\src: gfx.cpp / gfx.h (Scaleform GFx 2.x in Origins, 3.x in Dragon

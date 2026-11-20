@@ -177,6 +177,22 @@ Each decision with its reason, so it is not reopened by accident.
 - 2026-11-19: publishing on GitHub, the installer and the merge with the other
   Dragon Age game into one project: see the root NOTEBOOK.md (Decisions).
 
+- 2026-11-20 evening (player: "нельзя это как-то исправить на постоянной основе?"):
+  the mod closes the EA app after the game exits. Reason: Steam starts the game
+  through the EA app; EASteamLauncher creates DragonAge2.exe suspended and EADesktop
+  lets it run. After a game session EADesktop stays alive and stops answering, so
+  every later start ends in ProxiedLaunchTimeout 15 s on (EASteamLauncher.log
+  13:48 and 20:42: "Game process created suspended", then the timeout, EaAppError)
+  and the game never runs. Closing EASteamLauncher and EASteamAuthHelper alone did
+  not help (20:42); closing EADesktop and EALocalHostSvc too did (20:45, the game
+  started). How: main.cpp StartExitWatcher starts scripts\DA2Access\DA2AccessWatch.exe
+  (core\watcher\watcher.cpp; built only for a game.h with kCloseAfterExit), which
+  waits for the game process, then CLOSE_AFTER_EXIT_DELAY (30 s, time for EA's
+  cloud saves), and closes the four processes of kCloseAfterExit unless the game
+  was started again; EABackgroundService (a service) is left alone. Lines
+  "exit watch: ..." in DA2Access.log. Cost: an EA app kept open for other games
+  closes after Dragon Age II.
+
 - 2026-11-19 (player): the dormant-enemy filter also serves Origins, which uses its
   own proven flag (CCObject +0x2C5 "active"); since the merge both games share it
   as RawObject::inPlay. (The earlier decision to run the two games as parallel
@@ -439,7 +455,8 @@ Each fact with how it was proven (file and line, log line, in-game test).
   by deploy.ps1 (player approved): bin_ship\dinput8.dll (Ultimate ASI Loader
   9.7.4 x86) and bin_ship\scripts\ with DA2Access.asi and DA2Access\ (prism.dll,
   da2access.gfx, third-party\prism\mpl-2.0.txt, NOTICE); DA2Access.log appears at
-  the first start; bin_ship\scripts\global.ini (loader settings, 2026-11-20 12:59).
+  the first start; bin_ship\scripts\global.ini (loader settings, 2026-11-20 12:59);
+  bin_ship\scripts\DA2Access\DA2AccessWatch.exe (exit watcher, 2026-11-20 20:57).
   The mod files and the LAA exe of the earlier copy went away with its folder.
 - Left from the earlier copy and used by the Steam one too (same Documents folder;
   the game ran there 2026-11-20): %USERPROFILE%\Documents\BioWare\Dragon Age
@@ -565,3 +582,10 @@ One line per in-game test: date, what was tested, result.
   widgets lie under TrainingTutorial* is read passively and never takes the keys
   (Origins tutorials sit under TutorialContainer_mc and are not affected). Both
   built and deployed, NOT tested.
+- 2026-11-20 20:32-20:45 (player): after quitting the game, Steam starts failed:
+  20:32 and 20:42 EASteamLauncher made the game process suspended, then
+  ProxiedLaunchTimeout (EADesktop alive since 15:33, not answering). Claude closed
+  EASteamLauncher and EASteamAuthHelper: still failed; then EADesktop and
+  EALocalHostSvc: the game started (player 20:46). Exit watcher built (Decisions),
+  checked with stand-in processes (closed the leftover after the delay; closed
+  nothing when the "game" was started again), deployed 20:57. In-game test pending.

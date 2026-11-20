@@ -27,6 +27,15 @@ foreach ($g in Select-Games $Game) {
     cmd /c $cmd
     if ($LASTEXITCODE -ne 0) { throw "build of $g failed ($LASTEXITCODE)" }
     Write-Host "Built $out\$($info.Mod).asi"
+    # Exit watcher (core\watcher) for a game whose game.h lists programs to close
+    # after it exits (Dragon Age II: the EA app).
+    if (Select-String -Path "$root\games\$g\game.h" -Pattern 'kCloseAfterExit' -Quiet) {
+        $cmd = "`"$vcvars`" >nul && cl /nologo /std:c++17 /O2 /MT /EHsc /utf-8 /W3 `"$root\core\watcher\watcher.cpp`" " +
+               "/Fo`"$out\\`" /Fe`"$out\$($info.Mod)Watch.exe`" /link /SUBSYSTEM:WINDOWS user32.lib shell32.lib"
+        cmd /c $cmd
+        if ($LASTEXITCODE -ne 0) { throw "watcher build of $g failed ($LASTEXITCODE)" }
+        Write-Host "Built $out\$($info.Mod)Watch.exe"
+    }
     # Flash agent loaded into the game's menus (FFDec compiles core\agent\daoaccess.as)
     python "$root\tools\build_agent.py" "$out\$($info.Agent)"
     if ($LASTEXITCODE -ne 0) { throw "agent build of $g failed ($LASTEXITCODE)" }

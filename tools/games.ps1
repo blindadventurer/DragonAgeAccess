@@ -14,7 +14,7 @@ $Games = [ordered]@{
         Mod       = 'DA2Access'
         Agent     = 'da2access.gfx'
         Docs      = 'BioWare\Dragon Age 2'
-        Processes = @('DragonAge2', 'DragonAge2Launcher', 'DragonAge2Config')
+        Processes = @('DragonAge2', 'DragonAge2Launcher', 'DragonAge2Config', 'DA2AccessWatch')
     }
 }
 

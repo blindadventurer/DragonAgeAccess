@@ -65,6 +65,7 @@ namespace da2_game {
 GAME_INFO_BODY(L"da2")
 }
 #undef GAME_DA2
+#undef CLOSE_AFTER_EXIT_DELAY
 #undef MOD_TITLE
 #undef MOD_NAME
 #undef GAME_TITLE
