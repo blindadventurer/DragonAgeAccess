@@ -22,6 +22,7 @@ struct GameInfo {
     std::string unwrapFrom, unwrapResult;  // SHA-256 of the Steam exe and of its 4 GB copy
     std::wstring ruIni, ruPage;            // Russian text: settings file in Documents\<docs>, translation page
     std::vector<std::wstring> ruFiles;     // talk tables copied into the install folder
+    std::wstring steamApp;                 // Steam app id whose launch option skips the launcher
 };
 
 #define GAME_INFO_BODY(keyText)                                                    \
@@ -43,6 +44,7 @@ struct GameInfo {
         if (kRuText.ini) g.ruIni = kRuText.ini;                                    \
         if (kRuText.page) g.ruPage = kRuText.page;                                 \
         for (const wchar_t* f : kRuText.files) if (f) g.ruFiles.push_back(f);      \
+        if (kSteamLaunch.appId) g.steamApp = kSteamLaunch.appId;                   \
         return g;                                                              \
     }
 

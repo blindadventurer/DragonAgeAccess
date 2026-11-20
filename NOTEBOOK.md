@@ -152,7 +152,7 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   проверяет GitHub и обновляет мод"): one installer for both games,
   core\installer\setup.cpp (games_table.h takes both games' names from their game.h),
   built by build_setup.ps1 into DragonAgeAccess-Setup.exe (installer version
-  kSetupVersion, 1.3 since 2026-11-20 evening). It holds no mod files and is rebuilt only when its code
+  kSetupVersion, 1.4 since 2026-11-20 late evening). It holds no mod files and is rebuilt only when its code
   changes. Steps: finds both games (installer folder, HKLM BioWare keys, GOG keys,
   Steam libraries, EA / Origin / GOG default folders) and asks in a task dialog with
   named command buttons: each game (with its folder or "not found"), both, or a
@@ -216,6 +216,23 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   not to ask for now; without them the installer offers to open
   https://enpy.net/projects/localizations/games/dragon_age_origins/ in the browser
   to download the translation, and to run the installer again afterwards); (3) Steam builds in kProvenBuilds, release, README.
+- 2026-11-20 (player: "автоматический пропуск ланчера в первой части"): installer 1.4
+  writes the Origins Steam launch option itself (setup.cpp SteamLaunchOption, app id
+  in games\dao\game.h kSteamLaunch; Dragon Age II has none). Only for a game in
+  <library>\steamapps\common with appmanifest_47810.acf. With a question, it sets
+  LaunchOptions = "<game>\bin_ship\DAOrigins.exe" %command% (the player's own options
+  kept after it) in userdata\<account>\config\localconfig.vdf, block
+  UserLocalConfigStore\Software\Valve\Steam\apps\47810 (made when missing), backup
+  localconfig.vdf.before-access. Account: ActiveUser while Steam runs, else accounts
+  whose file holds the game, else the newest login in config\loginusers.vdf. Steam
+  writes that file when it exits, so a running Steam is closed (steam.exe -shutdown,
+  up to 45 s, then "close it yourself, Retry") and started again; both through
+  Explorer (ShellRunUnelevated), so Steam never runs as administrator. Record line
+  steamlaunch=<account>|<options before>; removal puts the old options back (in the
+  "вернуть настройки" question) only where they still start the game exe.
+  Proven on the player's PC 2026-11-20 21:50 (test log): Steam closed and reopened,
+  option written, game started without the launcher. Not in a GitHub release yet
+  (the published installer is still 1.3).
 - Nothing else is needed on a tester's PC: the mod and prism.dll import only Windows
   DLLs (pefile 2026-11-20: no Visual C++ runtime; Prism delay-loads the PC-Talker,
   ZDSR and BoyPC client DLLs only for those readers).
@@ -293,6 +310,10 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   (games\dao\work\DAOrigins.unpacked.exe); Dragon Age II has no decrypted copy.
 - The installer needs administrator rights; a test run from a non-elevated shell
   fails with ERROR_ELEVATION_REQUIRED, so tests use build_setup.ps1 -AsInvoker.
+- Never run the test installer from Git Bash: it rewrites arguments that start with
+  "/" (/auto becomes a path), so the installer ran without /auto and showed real
+  dialogs on the player's screen (2026-11-20 21:40). Run it from PowerShell
+  (Start-Process -ArgumentList) and check that the log's first line ends in "auto".
 
 ## Test log
 
@@ -328,3 +349,20 @@ One line per test of the shared parts; in-game tests go in the game's notebook.
   record; /uninstall deleted the six files and wrote Locale=en-us back (the ini then
   byte-identical to its backup). The no-translation question (Russian Windows, not
   /auto) not seen yet; no dialog tried with NVDA.
+- 2026-11-20 ~21:50 (Claude, scratch folder, PowerShell): installer 1.4 test build,
+  /auto with /steam:<copy> on three copies of Steam settings: (1) the player's
+  localconfig.vdf before the hand edit: one LaunchOptions line added in apps\47810,
+  exactly like the hand edit; (2) no account with the game: newest login chosen,
+  block "47810" made; (3) LaunchOptions "-novid \"x\"": became "<exe>" %command%
+  -novid "x". Reinstall: "уже", nothing written. /uninstall: old options back
+  ("" in 1 and 2, the line stays empty). Steam closing / reopening not exercised.
+  An earlier run from Git Bash lost /auto and showed dialogs to the player; real
+  files checked afterwards: unchanged.
+- 2026-11-20 21:50-21:52 (player, real Steam, NVDA): installer 1.4 (admin build,
+  /gamekey:dao /source: a copy of the mod files already in the game) with Steam open
+  and the Origins launch option removed beforehand by Claude: update chosen, launch
+  option question answered Yes, Steam closed through Explorer (-shutdown) and started
+  again (21:50:31), LaunchOptions written (localconfig.vdf 21:51:39 after Steam's own
+  write), record steamlaunch=1588692629|. Game started from Steam without the
+  launcher: mod log 21:51:03 cmdline "<exe>" "<launcher>", "Dragon Age Access
+  загружен", 4095 MB address space. Player: "все работает".

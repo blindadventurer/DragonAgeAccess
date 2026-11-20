@@ -45,7 +45,8 @@ Dragon Age II (пройдены создание персонажа и прол�
 
 Dragon Age: Origins:
 
-- Steam запускает сначала окно запуска игры (лаунчер), а в нём кнопка «Играть» не видна экранному диктору. Чтобы Steam сразу запускал саму игру, откройте в Steam свойства игры и в поле «Параметры запуска» впишите строку ниже, заменив путь на папку вашей игры, если она стоит в другом месте:
+- Steam запускает сначала окно запуска игры (лаунчер), а в нём кнопка «Играть» не видна экранному диктору. Установщик (с версии 1.4) спросит, запускать ли игру сразу, без лаунчера. Если согласиться, он впишет в свойства игры в Steam параметры запуска, при которых Steam запускает саму игру. Если Steam открыт, установщик закроет его на время и потом откроет снова. Копия файла настроек Steam сохраняется как localconfig.vdf.before-access, а при удалении мода установщик предложит вернуть прежние параметры.
+- То же можно сделать вручную: откройте в Steam свойства игры и в поле «Параметры запуска» впишите строку ниже, заменив путь на папку вашей игры, если она стоит в другом месте:
 
 ```
 "C:\Program Files (x86)\Steam\steamapps\common\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe" %command%
@@ -73,6 +74,7 @@ Dragon Age II:
    - скачивает последнюю версию мода для выбранной игры;
    - копирует файлы мода в папку игры и в папку override в Документах, а потом проверяет, что они на месте;
    - включает игре доступ к 4 ГБ памяти, иначе игра может вылетать в больших локациях (копия исходного exe сохраняется). Для Origins из Steam это делается через Steamless, см. выше; для Dragon Age II из Steam и EA app 4 ГБ не включаются;
+   - для Origins из Steam вписывает параметры запуска, чтобы Steam запускал игру без лаунчера, см. выше;
    - снимает с камеры клавиши Page Up и Page Down, они нужны сканеру; колесо мыши продолжит управлять камерой (копия файла настроек сохраняется). Если игра ещё ни разу не запускалась, мод сделает это сам после её первого запуска;
    - предупреждает, если ваша версия игры ещё не проверялась с модом.
 5. Запустите игру как обычно. При запуске вы услышите «Dragon Age Access загружен» в Origins или «Dragon Age 2 Access загружен» в Dragon Age II.
@@ -85,7 +87,7 @@ Dragon Age II:
 
 ## Удаление
 
-Запустите установщик ещё раз, выберите игру и нажмите «Удалить мод». Он удалит мод и предложит вернуть исходный exe игры и клавиши камеры.
+Запустите установщик ещё раз, выберите игру и нажмите «Удалить мод». Он удалит мод и предложит вернуть исходный exe игры, клавиши камеры, прежний язык текста и прежние параметры запуска в Steam.
 
 Вручную: из папки bin_ship игры удалите файл dinput8.dll, файл scripts\DAOAccess.asi или scripts\DA2Access.asi и папку scripts\DAOAccess или scripts\DA2Access. Из папки override в Документах удалите daoaccess.gfx или da2access.gfx.
 
@@ -175,7 +177,7 @@ Both games: an object scanner with distance and direction by category (character
 
 ## Steam copies
 
-- Origins: Steam starts the game's launcher, whose Play button a screen reader cannot see. In Steam, game properties, set the launch options to the game exe followed by %command% (adjust the path to your library):
+- Origins: Steam starts the game's launcher, whose Play button a screen reader cannot see. The installer (since 1.4) offers to set Steam launch options that start the game exe directly; if Steam is open it closes it for a moment and opens it again (Steam's localconfig.vdf is backed up as localconfig.vdf.before-access, and removing the mod offers to put the old options back). By hand: in Steam, game properties, set the launch options to the game exe followed by %command% (adjust the path to your library):
 
 ```
 "C:\Program Files (x86)\Steam\steamapps\common\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe" %command%
@@ -192,7 +194,7 @@ One installer for both games; it downloads the newest mod itself, so it needs th
 1. From Releases, download DragonAgeAccess-Setup.exe.
 2. Run it. Windows may warn about an unknown publisher (the installer has no paid code signature): choose "More info", then "Run anyway", then allow the changes (the games often sit in Program Files, so the installer needs administrator rights).
 3. It finds the games (GOG, Steam, EA app, plain installs) and asks which one: one game, both, or a game folder chosen by hand.
-4. It asks its questions in standard dialogs with named buttons; Yes everywhere is fine. It downloads the newest mod for that game, copies it into the game and into the override folder in Documents and checks the files are there, gives the game access to 4 GB of memory (Large Address Aware; the original exe is backed up), frees Page Up and Page Down from the camera for the scanner (ZoomIn_1 / ZoomOut_1 in KeyBindings.ini; backed up, the mouse wheel still zooms; if the game was never started, the mod does it itself after the first start), and warns when your game version has not been tested.
+4. It asks its questions in standard dialogs with named buttons; Yes everywhere is fine. It downloads the newest mod for that game, copies it into the game and into the override folder in Documents and checks the files are there, gives the game access to 4 GB of memory (Large Address Aware; the original exe is backed up), for Origins from Steam sets the launch options that skip the launcher, frees Page Up and Page Down from the camera for the scanner (ZoomIn_1 / ZoomOut_1 in KeyBindings.ini; backed up, the mouse wheel still zooms; if the game was never started, the mod does it itself after the first start), and warns when your game version has not been tested.
 5. Start the game as usual. You hear "Dragon Age Access загружен" (Origins) or "Dragon Age 2 Access загружен" (Dragon Age II) at start.
 
 To update, run the same installer again: it compares the installed version with the newest and offers "Update to version ...". If it reports that mod files vanished right after installing, an antivirus removed them (the mod loader dinput8.dll is often taken for a threat by mistake): add the game folder to the antivirus exclusions and run the installer again.
@@ -201,7 +203,7 @@ Manual install: the DAOAccess-<version>.zip and DA2Access-<version>.zip archives
 
 ## Uninstall
 
-Run the installer again, pick the game and choose "Remove the mod": it removes the mod and offers to put back the original exe and camera keys. By hand: delete dinput8.dll, scripts\<Mod>.asi and the scripts\<Mod> folder from the game's bin_ship (<Mod> is DAOAccess or DA2Access), and the .gfx file from the override folder.
+Run the installer again, pick the game and choose "Remove the mod": it removes the mod and offers to put back the original exe, the camera keys, the former text language and the former Steam launch options. By hand: delete dinput8.dll, scripts\<Mod>.asi and the scripts\<Mod> folder from the game's bin_ship (<Mod> is DAOAccess or DA2Access), and the .gfx file from the override folder.
 
 ## Keys
 

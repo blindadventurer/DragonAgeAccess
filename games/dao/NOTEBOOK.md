@@ -1234,6 +1234,11 @@ Changed (settings, not game files):
   (value: the bin_ship\DAOrigins.exe path in quotes, then %command%), Steam
   started again. Backup localconfig.vdf.before-access next to it. Undo: clear the
   field in Steam, game properties, General, Launch options.
+  Since installer 1.4 the installer does the same for any Steam player who agrees
+  (root NOTEBOOK.md, Decisions, launch option).
+  Proven with the real Steam 2026-11-20 21:50 (Claude had removed the line
+  first; installer 1.4 wrote it back, closing and reopening Steam; root NOTEBOOK.md
+  Test log).
 
 - %USERPROFILE%\Documents\BioWare\Dragon Age\Settings\KeyBindings.ini:
   ZoomIn_1 and ZoomOut_1 (were Keyboard::Button_Next / Button_Prior) set to

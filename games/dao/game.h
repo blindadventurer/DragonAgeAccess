@@ -41,6 +41,15 @@ static const SteamUnwrap kSteamUnwrap = {
     "400c2c9e97bb1a534121553be66f202429ef6f7320c93c86f9b7a491864647bd",
     "b74dca7a1b1b69f9242d94afb47b2f67e8c655df89914352cca7d31f76dd8f45"};
 
+// Steam starts DAOriginsLauncher.exe, whose window gave the player's screen reader no
+// Play button (test 2026-11-20 12:55). The launch option
+// "<game>\bin_ship\DAOrigins.exe" %command% makes Steam start the game exe at once
+// (proven 2026-11-20 13:12, NOTEBOOK.md Game). The installer writes it into Steam's
+// localconfig.vdf (setup.cpp SteamLaunchOption) for this Steam app id
+// (steamapps\appmanifest_47810.acf, "appid" "47810", read 2026-11-20).
+struct SteamLaunch { const wchar_t* appId; };
+static const SteamLaunch kSteamLaunch = {L"47810"};
+
 // Russian text (installer, setup.cpp RussianText). A translation in the override
 // folder (ENPY's lies in override\enpy) is not enough: the game falls back to English
 // unless its install folder holds packages\core\data\talktables\core_<Locale>.tlk

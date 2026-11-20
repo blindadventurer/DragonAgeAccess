@@ -10,7 +10,8 @@
 // copies the files; offers the 4 GB memory flag (Large Address Aware; for the Steam
 // Origins exe through Steamless, SteamUnwrapWork) and freeing
 // Page Up / Page Down from the camera; Origins: Russian text from a translation
-// already in the override folder (RussianText); writes bin_ship\scripts\<Mod>\install.txt
+// already in the override folder (RussianText); Origins on Steam: a Steam launch option
+// that starts the game exe instead of the launcher (SteamLaunchOption); writes bin_ship\scripts\<Mod>\install.txt
 // (version, files, loader hash) for later updates and removal.
 //
 // Only standard Windows dialogs (message boxes and task dialogs with named buttons),
@@ -22,7 +23,9 @@
 // /uninstall removes; /game:<folder> /docs:<Documents folder> replace the found ones;
 // /source:<zip or folder> installs from a local release instead of GitHub;
 // /repo:<owner/name> reads releases of another repository; /check:<Mod> only finds,
-// downloads and unpacks the newest <Mod> release. Log: %TEMP%\DragonAgeAccess-setup.log
+// downloads and unpacks the newest <Mod> release; /steam:<Steam folder> uses that
+// folder's userdata instead of the installed Steam and never closes or starts Steam.
+// Log: %TEMP%\DragonAgeAccess-setup.log
 // (and bin_ship\scripts\<Mod>.setup.log).
 #include <windows.h>
 #include <commctrl.h>
@@ -33,21 +36,26 @@
 #include <shellapi.h>
 #include <winhttp.h>
 #include <bcrypt.h>
+#include <exdisp.h>
+#include <shlguid.h>
+#include <shldisp.h>
 #include <string>
 #include <vector>
 #include "games_table.h"
 
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' " \
                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "uuid.lib")
 
-static const wchar_t kSetupVersion[] = L"1.3";
+static const wchar_t kSetupVersion[] = L"1.4";
 static const wchar_t kDefaultRepo[] = L"blindadventurer/DragonAgeAccess";
 // Ultimate ASI Loader 9.7.4 x86 dinput8.dll (NOTEBOOK.md): recognised as ours when an
 // older install has no install.txt.
 static const char kKnownLoaderSha256[] = "d5a059aa467a7a7127c8f6169f79fa63ff0f55986ee9eb2fd9a281bebf2aa2e6";
 
 static bool g_ru = true, g_auto = false, g_uninstall = false;
-static std::wstring g_gameArg, g_docsArg, g_gameKey, g_source, g_repo = kDefaultRepo;
+static std::wstring g_gameArg, g_docsArg, g_gameKey, g_source, g_steamArg, g_repo = kDefaultRepo;
 static std::vector<std::wstring> g_log;
 
 static void Log(const std::wstring& s) { g_log.push_back(s); }
@@ -874,11 +882,13 @@ static Paths MakePaths(const GameInfo& g, const std::wstring& game) {
 // bin_ship\scripts\<Mod>\install.txt: what this installer put there.
 // rufile= talk tables this installer copied into the install folder (Russian text),
 // locale= the Locale value before it set ru-ru (kept across updates).
+// steamlaunch=<Steam account id>|<launch options before> for each Steam account whose
+// launch options this installer changed (kept across updates).
 struct Record {
     bool ok = false, localeRec = false;
     std::wstring version, oldLocale;
     std::string loaderSha;
-    std::vector<std::wstring> files, ruFiles;
+    std::vector<std::wstring> files, ruFiles, steamLaunch;
 };
 
 static Record ReadRecord(const Paths& p) {
@@ -899,6 +909,7 @@ static Record ReadRecord(const Paths& p) {
         else if (line.compare(0, 5, L"file=") == 0) r.files.push_back(line.substr(5));
         else if (line.compare(0, 7, L"rufile=") == 0) r.ruFiles.push_back(line.substr(7));
         else if (line.compare(0, 7, L"locale=") == 0) { r.localeRec = true; r.oldLocale = line.substr(7); }
+        else if (line.compare(0, 12, L"steamlaunch=") == 0) r.steamLaunch.push_back(line.substr(12));
     }
     return r;
 }
@@ -1055,6 +1066,401 @@ static void RussianText(const GameInfo& g, const Paths& p, const Record& old, st
     finish();
 }
 
+// ---------------------------------------------------------------- Steam launch options
+
+// Origins on Steam: Steam starts DAOriginsLauncher.exe, whose window gave the
+// player's screen reader no Play button (games\dao\game.h kSteamLaunch). The launch
+// option "<game>\bin_ship\DAOrigins.exe" %command% makes Steam start the game exe
+// itself (proven 2026-11-20 13:12). Steam keeps launch options per account in
+// <Steam>\userdata\<account id>\config\localconfig.vdf, block
+// UserLocalConfigStore\Software\Valve\Steam\apps\<app id>, value LaunchOptions (read
+// on the player's PC 2026-11-20, where it was set by hand that day). Steam reads the
+// file when it starts and writes it when it exits, so a running Steam is closed while
+// the file changes and started again afterwards.
+
+// A VDF (Valve KeyValues text) token: a quoted string, '{' or '}'. depth: braces open
+// before it ('{' and its '}' get the same depth, the keys inside one more).
+struct VdfTok { char type; size_t begin, end; int depth; std::string value; };
+static const size_t kNone = std::string::npos;
+
+static bool VdfTokens(const std::string& s, std::vector<VdfTok>& t) {
+    t.clear();
+    int depth = 0;
+    for (size_t i = 0; i < s.size();) {
+        char c = s[i];
+        if (c == '/' && i + 1 < s.size() && s[i + 1] == '/') {  // comment to the end of the line
+            i = s.find('\n', i);
+            if (i == kNone) break;
+        } else if (c == '{') {
+            t.push_back({'{', i, i + 1, depth++, ""});
+            ++i;
+        } else if (c == '}') {
+            if (depth == 0) return false;
+            t.push_back({'}', i, i + 1, --depth, ""});
+            ++i;
+        } else if (c == '"') {
+            VdfTok k{'"', i, 0, depth, ""};
+            for (++i; i < s.size() && s[i] != '"'; ++i) {
+                if (s[i] == '\\' && i + 1 < s.size()) {
+                    ++i;
+                    k.value += s[i] == 'n' ? '\n' : s[i] == 't' ? '\t' : s[i];
+                } else {
+                    k.value += s[i];
+                }
+            }
+            if (i >= s.size()) return false;
+            k.end = ++i;
+            t.push_back(k);
+        } else {
+            ++i;
+        }
+    }
+    return depth == 0;
+}
+
+// The token of key `key` (any case) directly inside the block whose '{' is t[open]
+// (kNone: the top level), or kNone.
+static size_t VdfKey(const std::vector<VdfTok>& t, size_t open, const char* key) {
+    int depth = open == kNone ? 0 : t[open].depth + 1;
+    for (size_t i = open == kNone ? 0 : open + 1; i < t.size(); ++i) {
+        if (t[i].depth < depth) break;  // the block's '}'
+        if (t[i].type != '"' || t[i].depth != depth) continue;
+        if (_stricmp(t[i].value.c_str(), key) == 0) return i;
+        ++i;  // its value, or the '{' of its block (whose tokens lie deeper)
+    }
+    return kNone;
+}
+
+// The '{' of block `key` inside the block at t[open], or kNone.
+static size_t VdfBlock(const std::vector<VdfTok>& t, size_t open, const char* key) {
+    size_t k = VdfKey(t, open, key);
+    return k != kNone && k + 1 < t.size() && t[k + 1].type == '{' ? k + 1 : kNone;
+}
+
+// The '{' of UserLocalConfigStore\Software\Valve\Steam\apps, or kNone.
+static size_t VdfApps(const std::vector<VdfTok>& t) {
+    size_t b = kNone;  // the top level
+    for (const char* k : {"UserLocalConfigStore", "Software", "Valve", "Steam", "apps"})
+        if ((b = VdfBlock(t, b, k)) == kNone) break;
+    return b;
+}
+
+static std::string VdfQuote(const std::string& v) {
+    std::string q = "\"";
+    for (char c : v) {
+        if (c == '\\' || c == '"') q += '\\';
+        q += c;
+    }
+    return q + "\"";
+}
+
+// The app's LaunchOptions in localconfig.vdf text (empty when it has none); ok=false
+// when the file is not understood.
+struct LaunchOpt { bool ok = false; std::string value; };
+static LaunchOpt VdfLaunch(const std::string& s, const std::string& app) {
+    LaunchOpt r;
+    std::vector<VdfTok> t;
+    if (!VdfTokens(s, t)) return r;
+    size_t apps = VdfApps(t);
+    if (apps == kNone) return r;
+    r.ok = true;
+    size_t a = VdfBlock(t, apps, app.c_str());
+    size_t k = a == kNone ? kNone : VdfKey(t, a, "LaunchOptions");
+    if (k != kNone && k + 1 < t.size() && t[k + 1].type == '"') r.value = t[k + 1].value;
+    return r;
+}
+
+// Sets the app's LaunchOptions, adding the value, or the app's block, when missing
+// (tabs and line feeds as Steam writes them).
+static bool VdfSetLaunch(std::string& s, const std::string& app, const std::string& value) {
+    std::vector<VdfTok> t;
+    if (!VdfTokens(s, t)) return false;
+    size_t apps = VdfApps(t);
+    if (apps == kNone) return false;
+    size_t a = VdfBlock(t, apps, app.c_str());
+    if (a == kNone) {
+        std::string tabs(t[apps].depth + 1, '\t');
+        s.insert(t[apps].end, "\n" + tabs + VdfQuote(app) + "\n" + tabs + "{\n" + tabs + "\t\"LaunchOptions\"\t\t" +
+                                  VdfQuote(value) + "\n" + tabs + "}");
+        return true;
+    }
+    size_t k = VdfKey(t, a, "LaunchOptions");
+    if (k != kNone && k + 1 < t.size() && t[k + 1].type == '"')
+        s.replace(t[k + 1].begin, t[k + 1].end - t[k + 1].begin, VdfQuote(value));
+    else
+        s.insert(t[a].end, "\n" + std::string(t[a].depth + 1, '\t') + "\"LaunchOptions\"\t\t" + VdfQuote(value));
+    return true;
+}
+
+static std::wstring SteamFolder() {
+    if (!g_steamArg.empty()) return g_steamArg;
+    std::wstring s = RegString(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", L"SteamPath", 0);
+    for (wchar_t& c : s) if (c == L'/') c = L'\\';
+    return s;
+}
+
+static std::wstring SteamConfig(const std::wstring& steam, const std::wstring& id) {
+    return steam + L"\\userdata\\" + id + L"\\config\\localconfig.vdf";
+}
+
+// Steam accounts (names of the userdata folders) whose launch options change: the
+// account signed in now (HKCU ...\Steam\ActiveProcess ActiveUser, while Steam runs);
+// else every account whose settings already hold the game; else the account that
+// signed in last (config\loginusers.vdf, newest "timestamp"; userdata uses the low 32
+// bits of the SteamID64).
+static std::vector<std::wstring> SteamUsers(const std::wstring& steam, const std::string& app) {
+    std::vector<std::wstring> users;
+    DWORD active = 0, size = sizeof active;
+    if (g_steamArg.empty() &&
+        RegGetValueW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam\\ActiveProcess", L"ActiveUser", RRF_RT_REG_DWORD,
+                     nullptr, &active, &size) == ERROR_SUCCESS &&
+        active && FileExists(SteamConfig(steam, std::to_wstring(active)))) {
+        Log(L"Steam account signed in: " + std::to_wstring(active));
+        return {std::to_wstring(active)};
+    }
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW((steam + L"\\userdata\\*").c_str(), &fd);
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            std::wstring n = fd.cFileName;
+            if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || n == L"." || n == L".." || n == L"0") continue;
+            std::string s;
+            std::vector<VdfTok> t;
+            if (!ReadAll(SteamConfig(steam, n), s) || !VdfTokens(s, t)) continue;
+            size_t apps = VdfApps(t);
+            if (apps != kNone && VdfBlock(t, apps, app.c_str()) != kNone) users.push_back(n);
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    for (const std::wstring& u : users) Log(L"Steam account with the game: " + u);
+    if (!users.empty()) return users;
+    std::string s;
+    std::vector<VdfTok> t;
+    if (ReadAll(steam + L"\\config\\loginusers.vdf", s) && VdfTokens(s, t)) {
+        size_t list = VdfBlock(t, kNone, "users");
+        unsigned long long best = 0, bestTime = 0;
+        for (size_t i = list == kNone ? t.size() : list + 1; i + 1 < t.size() && t[i].depth > t[list].depth; ++i) {
+            if (t[i].type != '"' || t[i].depth != t[list].depth + 1 || t[i + 1].type != '{') continue;
+            size_t ts = VdfKey(t, i + 1, "timestamp");
+            unsigned long long when = ts != kNone && ts + 1 < t.size() ? _strtoui64(t[ts + 1].value.c_str(), nullptr, 10) : 0;
+            unsigned long long id = _strtoui64(t[i].value.c_str(), nullptr, 10);
+            if (id > 76561197960265728ULL && when >= bestTime) { best = id; bestTime = when; }
+        }
+        std::wstring id = best ? std::to_wstring(best - 76561197960265728ULL) : L"";
+        if (!id.empty() && FileExists(SteamConfig(steam, id))) {
+            Log(L"Steam account signed in last: " + id);
+            users.push_back(id);
+        }
+    }
+    return users;
+}
+
+static bool ProcessRunning(const wchar_t* name) {
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return false;
+    PROCESSENTRY32W pe = {sizeof pe};
+    bool found = false;
+    for (BOOL ok = Process32FirstW(snap, &pe); ok && !found; ok = Process32NextW(snap, &pe))
+        found = _wcsicmp(pe.szExeFile, name) == 0;
+    CloseHandle(snap);
+    return found;
+}
+
+// Starts a program as the signed-in user without administrator rights: the installer
+// runs elevated, and Steam must not. Asks Explorer's desktop to start it
+// (IShellDispatch2::ShellExecute through the desktop folder view).
+static bool ShellRunUnelevated(const std::wstring& file, const std::wstring& args) {
+    bool ok = false;
+    IShellWindows* windows = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_LOCAL_SERVER, IID_PPV_ARGS(&windows)))) return false;
+    VARIANT loc, empty;
+    VariantInit(&loc);
+    VariantInit(&empty);
+    loc.vt = VT_I4;
+    loc.lVal = CSIDL_DESKTOP;
+    long hwnd = 0;
+    IDispatch* desk = nullptr;
+    IServiceProvider* sp = nullptr;
+    IShellBrowser* browser = nullptr;
+    IShellView* view = nullptr;
+    IDispatch* bg = nullptr;
+    IShellFolderViewDual* folder = nullptr;
+    IDispatch* appDisp = nullptr;
+    IShellDispatch2* shell = nullptr;
+    if (windows->FindWindowSW(&loc, &empty, SWC_DESKTOP, &hwnd, SWFO_NEEDDISPATCH, &desk) == S_OK && desk &&
+        SUCCEEDED(desk->QueryInterface(IID_PPV_ARGS(&sp))) &&
+        SUCCEEDED(sp->QueryService(SID_STopLevelBrowser, IID_PPV_ARGS(&browser))) &&
+        SUCCEEDED(browser->QueryActiveShellView(&view)) &&
+        SUCCEEDED(view->GetItemObject(SVGIO_BACKGROUND, IID_PPV_ARGS(&bg))) &&
+        SUCCEEDED(bg->QueryInterface(IID_PPV_ARGS(&folder))) && SUCCEEDED(folder->get_Application(&appDisp)) &&
+        SUCCEEDED(appDisp->QueryInterface(IID_PPV_ARGS(&shell)))) {
+        BSTR f = SysAllocString(file.c_str());
+        VARIANT a;
+        VariantInit(&a);
+        a.vt = VT_BSTR;
+        a.bstrVal = SysAllocString(args.c_str());
+        ok = SUCCEEDED(shell->ShellExecute(f, a, empty, empty, empty));
+        VariantClear(&a);
+        SysFreeString(f);
+    }
+    for (IUnknown* u : std::initializer_list<IUnknown*>{shell, appDisp, folder, bg, view, browser, sp, desk, windows})
+        if (u) u->Release();
+    Log(L"started unelevated: \"" + file + L"\" " + args + (ok ? L"" : L" FAILED"));
+    return ok;
+}
+
+static bool WaitSteamExit(void*) {
+    for (int i = 0; i < 90; ++i) {
+        if (!ProcessRunning(L"steam.exe")) return true;
+        Sleep(500);
+    }
+    return false;
+}
+
+// Asks Steam to exit (steam.exe -shutdown) and waits; Steam writes its settings as it
+// exits. False when it is still running and the player gives up.
+static bool CloseSteam(const std::wstring& steamExe) {
+    ShellRunUnelevated(steamExe, L"-shutdown");
+    for (;;) {
+        if (RunBusy(T(L"Закрываю Steam...", L"Closing Steam..."), WaitSteamExit, nullptr)) {
+            Log(L"Steam closed");
+            Sleep(1000);
+            return true;
+        }
+        int r = Ask(T(L"Steam не закрылся. Закройте его сами: в окне Steam меню Steam, пункт «Выход». Потом нажмите «Повторить».",
+                      L"Steam did not close. Close it yourself (Steam menu, Exit), then press Retry."),
+                    MB_RETRYCANCEL | MB_ICONWARNING, IDCANCEL);
+        if (r != IDRETRY) return false;
+    }
+}
+
+static bool SetSteamLaunch(const std::wstring& steam, const std::wstring& id, const std::string& app, const std::string& value,
+                           std::wstring& err) {
+    std::wstring file = SteamConfig(steam, id);
+    std::string s;
+    if (!ReadAll(file, s)) { err = ErrText(GetLastError()); return false; }
+    if (!VdfSetLaunch(s, app, value)) { err = T(L"файл настроек Steam не распознан", L"the Steam settings file was not understood"); return false; }
+    if (!Backup(file, file + L".before-access")) { err = T(L"не удалось сделать копию файла настроек Steam", L"could not back up the Steam settings file"); return false; }
+    if (!WriteAll(file, s.data(), s.size(), err)) return false;
+    Log(L"Steam account " + id + L" launch options set: " + Widen(value));
+    return true;
+}
+
+// Current launch options of the account; ok=false when its settings are not understood.
+static LaunchOpt SteamLaunchOf(const std::wstring& steam, const std::wstring& id, const std::string& app) {
+    std::string s;
+    LaunchOpt cur;
+    if (ReadAll(SteamConfig(steam, id), s)) cur = VdfLaunch(s, app);
+    Log(L"Steam account " + id + (cur.ok ? L" launch options: \"" + Widen(cur.value) + L"\"" : L": settings not understood"));
+    return cur;
+}
+
+static bool StartsExe(const LaunchOpt& cur, const Paths& p) {
+    return cur.ok && Lower(Widen(cur.value)).find(Lower(p.exe)) != std::wstring::npos;
+}
+
+// The game exe in front of %command%, keeping whatever options the player had.
+static std::string MergeLaunch(const std::string& before, const std::string& want) {
+    if (before.find_first_not_of(" \t") == std::string::npos) return want;
+    size_t c = before.find("%command%");
+    if (c != std::string::npos) return before.substr(0, c) + want + before.substr(c + 9);
+    return want + " " + before;  // options without %command% go after the command
+}
+
+// The game is in a Steam library: <library>\steamapps\common\<folder>, with
+// steamapps\appmanifest_<app id>.acf.
+static bool SteamCopy(const GameInfo& g, const Paths& p) {
+    std::wstring common = Parent(p.game), lib = Parent(common);
+    return !g.steamApp.empty() && Lower(FileName(common)) == L"common" && Lower(FileName(lib)) == L"steamapps" &&
+           FileExists(lib + L"\\appmanifest_" + g.steamApp + L".acf");
+}
+
+// Offers the launch option that skips the launcher (Origins on Steam). Adds
+// steamlaunch= lines to the record so removal can put the old options back.
+static void SteamLaunchOption(const GameInfo& g, const Paths& p, const Record& old, std::string& record, std::wstring& report) {
+    std::vector<std::wstring> changed = old.steamLaunch;
+    auto finish = [&]() {
+        for (const std::wstring& l : changed) record += "steamlaunch=" + Narrow(l) + "\r\n";
+    };
+    if (g.steamApp.empty()) return finish();
+    if (!SteamCopy(g, p)) {
+        Log(L"Steam launch option: not a Steam copy");
+        return finish();
+    }
+    std::wstring steam = SteamFolder(), steamExe = steam + L"\\steam.exe";
+    std::string app = Narrow(g.steamApp);
+    std::wstring want = L"\"" + p.exe + L"\" %command%";
+    std::wstring byHand = T(L" Это можно сделать вручную: в Steam откройте свойства игры, раздел «Общие», и в поле «Параметры запуска» впишите:\n",
+                            L" You can do it by hand: in Steam open the game's properties, General, and type into Launch options:\n") + want;
+    std::vector<std::wstring> users = SteamUsers(steam, app);
+    // Accounts whose launch options do not start the game exe yet, with their options.
+    std::vector<std::pair<std::wstring, std::string>> todo;
+    auto plan = [&]() {
+        todo.clear();
+        int understood = 0;
+        for (const std::wstring& id : users) {
+            LaunchOpt cur = SteamLaunchOf(steam, id, app);
+            if (!cur.ok) continue;
+            ++understood;
+            if (!StartsExe(cur, p)) todo.push_back({id, cur.value});
+        }
+        return understood;
+    };
+    if (users.empty() || plan() == 0) {
+        report += T(L"\n- не удалось найти настройки Steam, игра будет запускаться через лаунчер.",
+                    L"\n- Steam's settings were not found, the game starts through its launcher.") + byHand;
+        return finish();
+    }
+    if (todo.empty()) {
+        report += T(L"\n- Steam запускает игру сразу, без лаунчера", L"\n- Steam starts the game directly, without the launcher");
+        return finish();
+    }
+    bool running = g_steamArg.empty() && ProcessRunning(L"steam.exe");
+    if (running && g_auto) {
+        Log(L"Steam launch option skipped: Steam is running (auto mode)");
+        report += T(L"\n- параметры запуска в Steam не изменены: Steam открыт", L"\n- Steam launch options unchanged: Steam is open");
+        return finish();
+    }
+    int r = Ask(g.title + T(L" из Steam: запускать игру сразу, без лаунчера?\n\nСейчас Steam сначала открывает лаунчер игры, а в его окне программа экранного доступа не находит кнопку «Играть». Установщик впишет в свойства игры в Steam параметры запуска:\n",
+                            L" from Steam: start the game directly, without its launcher?\n\nSteam now opens the game's launcher first, and a screen reader finds no Play button in its window. The installer puts these launch options into the game's properties in Steam:\n") +
+                    want +
+                    T(L"\nС ними Steam запускает саму игру. Копия файла настроек Steam сохранится как localconfig.vdf.before-access.",
+                      L"\nWith them Steam starts the game itself. The Steam settings file is backed up as localconfig.vdf.before-access.") +
+                    (running ? T(L"\n\nSteam сейчас открыт. Чтобы изменить его настройки, установщик закроет Steam, а потом откроет снова.",
+                                 L"\n\nSteam is open now. To change its settings the installer closes Steam and then opens it again.")
+                             : L""),
+                MB_YESNO | MB_ICONQUESTION, IDYES);
+    if (r != IDYES) {
+        report += T(L"\n- Steam по-прежнему запускает игру через лаунчер", L"\n- Steam still starts the game through its launcher");
+        return finish();
+    }
+    if (running && !CloseSteam(steamExe)) {
+        report += T(L"\n- параметры запуска в Steam не изменены: Steam не закрылся.", L"\n- Steam launch options unchanged: Steam did not close.") + byHand;
+        return finish();
+    }
+    plan();  // again: Steam wrote its settings as it closed
+    std::wstring failed;
+    for (const auto& c : todo) {
+        std::wstring err;
+        if (SetSteamLaunch(steam, c.first, app, MergeLaunch(c.second, Narrow(want)), err)) {
+            std::wstring prefix = c.first + L"|";
+            for (size_t i = changed.size(); i-- > 0;)
+                if (changed[i].compare(0, prefix.size(), prefix) == 0) changed.erase(changed.begin() + i);
+            changed.push_back(prefix + Widen(c.second));
+        } else {
+            Log(L"Steam account " + c.first + L" launch options FAILED: " + err);
+            failed += L" " + err;
+        }
+    }
+    if (failed.empty())
+        report += T(L"\n- Steam будет запускать игру сразу, без лаунчера", L"\n- Steam will start the game directly, without the launcher");
+    else
+        report += T(L"\n- не удалось изменить параметры запуска в Steam:", L"\n- could not change the Steam launch options:") + failed + L"." + byHand;
+    if (running && !ShellRunUnelevated(steamExe, L""))
+        report += T(L"\n- Steam закрыт, откройте его снова сами", L"\n- Steam is closed, open it again yourself");
+    finish();
+}
+
 static std::wstring Install(const GameInfo& g, const Paths& p, const Package& pkg, bool& ok) {
     ok = false;
     std::wstring head = g.modTitle + L" " + pkg.version + L", " + g.title + L":\n";
@@ -1194,6 +1600,7 @@ static std::wstring Install(const GameInfo& g, const Paths& p, const Package& pk
     }
 
     RussianText(g, p, old, record, report);
+    SteamLaunchOption(g, p, old, record, report);
 
     // Page Up / Page Down. Without the settings file (the game never started yet) the
     // answer goes into install.txt as freekeys=1: the mod frees the keys itself, once,
@@ -1271,13 +1678,47 @@ static std::wstring Uninstall(const GameInfo& g, const Paths& p) {
     }
     bool keysBack = FileExists(p.keys) && ZoomKeys(p.keys, false, false, err) > 0;
     bool ruBack = !rec.ruFiles.empty() || rec.localeRec;
-    if (exeBack || keysBack || ruBack) {
+    // Steam launch options this installer changed (SteamLaunchOption) and that still
+    // start the game exe: account id and the options before.
+    std::vector<std::pair<std::wstring, std::string>> steamBack;
+    std::wstring steam = SteamFolder();
+    std::string app = Narrow(g.steamApp);
+    for (const std::wstring& l : rec.steamLaunch) {
+        size_t bar = l.find(L'|');
+        if (bar == std::wstring::npos || g.steamApp.empty()) continue;
+        if (StartsExe(SteamLaunchOf(steam, l.substr(0, bar), app), p)) steamBack.push_back({l.substr(0, bar), Narrow(l.substr(bar + 1))});
+    }
+    bool steamRunning = !steamBack.empty() && g_steamArg.empty() && ProcessRunning(L"steam.exe");
+    if (exeBack || keysBack || ruBack || !steamBack.empty()) {
         int r = Ask(g.title + T(L": вернуть игре и исходные настройки?\n", L": also put the game's settings back?\n") +
                         (exeBack ? T(L"\n- Исходный файл игры без доступа к 4 ГБ памяти.", L"\n- The original game exe without 4 GB of memory.") : L"") +
                         (keysBack ? T(L"\n- Клавиши Page Up и Page Down снова управляют камерой.", L"\n- Page Up and Page Down zoom the camera again.") : L"") +
                         (ruBack ? T(L"\n- Прежний язык текста игры: файлы русского текста, скопированные установщиком в папку игры, удаляются. Сам перевод в папке override остаётся.",
-                                    L"\n- The former game text language: the Russian text files the installer copied into the game folder are deleted. The translation in the override folder stays.") : L""),
+                                    L"\n- The former game text language: the Russian text files the installer copied into the game folder are deleted. The translation in the override folder stays.") : L"") +
+                        (steamBack.empty() ? L""
+                         : steamRunning ? T(L"\n- Steam снова запускает игру через лаунчер. Для этого установщик закроет Steam, а потом откроет снова.",
+                                            L"\n- Steam starts the game through its launcher again. For that the installer closes Steam and then opens it again.")
+                                        : T(L"\n- Steam снова запускает игру через лаунчер.", L"\n- Steam starts the game through its launcher again.")),
                     MB_YESNO | MB_ICONQUESTION, IDYES);
+        if (r == IDYES && !steamBack.empty()) {
+            std::wstring failed;
+            if (steamRunning && g_auto) {
+                Log(L"Steam launch options left: Steam is running (auto mode)");
+                failed = T(L" Steam открыт", L" Steam is open");
+            } else if (steamRunning && !CloseSteam(steam + L"\\steam.exe")) {
+                failed = T(L" Steam не закрылся", L" Steam did not close");
+            } else {
+                for (const auto& b : steamBack) {
+                    std::wstring err;
+                    if (!StartsExe(SteamLaunchOf(steam, b.first, app), p)) continue;  // the player changed it meanwhile
+                    if (!SetSteamLaunch(steam, b.first, app, b.second, err)) failed += L" " + err;
+                }
+                if (steamRunning && !ShellRunUnelevated(steam + L"\\steam.exe", L""))
+                    report += T(L"\n- Steam закрыт, откройте его снова сами", L"\n- Steam is closed, open it again yourself");
+            }
+            report += failed.empty() ? T(L"\n- Steam снова запускает игру через лаунчер", L"\n- Steam starts the game through its launcher again")
+                                     : T(L"\n- не удалось вернуть параметры запуска в Steam:", L"\n- could not put the Steam launch options back:") + failed;
+        }
         if (r == IDYES && ruBack) {
             for (const std::wstring& f : rec.ruFiles) {
                 std::wstring dest = p.game + L"\\" + f;
@@ -1412,6 +1853,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
         else if (_wcsnicmp(a.c_str(), L"/source:", 8) == 0) g_source = a.substr(8);
         else if (_wcsnicmp(a.c_str(), L"/repo:", 6) == 0) g_repo = a.substr(6);
         else if (_wcsnicmp(a.c_str(), L"/check:", 7) == 0) checkMod = a.substr(7);
+        else if (_wcsnicmp(a.c_str(), L"/steam:", 7) == 0) g_steamArg = a.substr(7);
     }
     LocalFree(argv);
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);

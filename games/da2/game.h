@@ -39,6 +39,10 @@ static const SteamUnwrap kSteamUnwrap = {nullptr, nullptr};
 static const wchar_t* const kCloseAfterExit[] = {
     L"EASteamLauncher.exe", L"EASteamAuthHelper.exe", L"EADesktop.exe", L"EALocalHostSvc.exe"};
 
+// Steam starts Dragon Age II itself (through the EA app), no launcher to skip.
+struct SteamLaunch { const wchar_t* appId; };
+static const SteamLaunch kSteamLaunch = {nullptr};
+
 // No Russian text step in the installer for Dragon Age II.
 struct RuText { const wchar_t* ini; const wchar_t* page; const wchar_t* files[6]; };
 static const RuText kRuText = {nullptr, nullptr, {}};
