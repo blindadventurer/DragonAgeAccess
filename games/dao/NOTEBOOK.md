@@ -1197,6 +1197,11 @@ Added (deleting them returns the game to normal; nothing was replaced):
   talktables\core_ru-ru.tlk and core_ru-ru_f.tlk, packages\core_ep1\data\talktables\
   core_ep1_ru-ru.tlk and _f, modules\single player\data\talktables\
   singleplayer_ru-ru.tlk and _f. Nothing replaced; delete them to undo.
+  Player's personal backup (2026-11-20 evening, on request): %USERPROFILE%\Documents\
+  Русификация Dragon Age Origins (ENPY).zip, 62 MB, 221 files: 1-Dokumenty-override\enpy
+  (the whole override\enpy folder), 2-Papka-igry (these six talk tables) and
+  Инструкция.txt (steps, Locale=ru-ru, ENPY link and terms). Never publish or ship
+  it (ENPY terms, root NOTEBOOK.md Decisions).
 
 Changed:
 
