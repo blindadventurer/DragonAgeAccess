@@ -1078,6 +1078,21 @@ void MoveInSection(void* movie, MovieState& st, int dir) {
         auto here = ChainItems(st, chain);
         size_t c = std::find(chains.begin(), chains.end(), chain) - chains.begin();
         size_t k = std::find(here.begin(), here.end(), g_curIndex) - here.begin();
+        // A Dragon Age II ability tree is one chain container with every icon of the
+        // tree (AbilityChainContainer_mc.AbilityIcon1..N), so chain to chain found
+        // nothing and Up/Down only said "Конец списка" (log 2026-11-20 20:52, tree
+        // Авангард, 11 abilities, reachable only with Left/Right). With one chain on
+        // the screen, Up/Down step through it.
+        if (SectionMode(st.file) && chains.size() == 1 && k < here.size()) {
+            size_t to = dir > 0 ? k + 1 : k - 1;  // wraps to a huge value below 0
+            if (to >= here.size()) {
+                LogLine(L"ability list edge");
+                Speak(dir > 0 ? L"Конец списка" : L"Начало списка", true);
+                return;
+            }
+            MoveTo(movie, st, here[to], dir > 0 ? L"down" : L"up");
+            return;
+        }
         size_t t = dir > 0 ? c + 1 : c - 1;  // wraps to a huge value below 0
         if (c < chains.size() && t < chains.size()) {
             auto there = ChainItems(st, chains[t]);

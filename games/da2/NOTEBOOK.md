@@ -588,4 +588,21 @@ One line per in-game test: date, what was tested, result.
   EASteamLauncher and EASteamAuthHelper: still failed; then EADesktop and
   EALocalHostSvc: the game started (player 20:46). Exit watcher built (Decisions),
   checked with stand-in processes (closed the leftover after the delay; closed
-  nothing when the "game" was started again), deployed 20:57. In-game test pending.
+  nothing when the "game" was started again), deployed 20:57. PROVEN 21:07-21:11
+  (player: "вторая часть теперь запускается"): two quits, each 30 s later "exit
+  watch: closed EADesktop.exe EALocalHostSvc.exe" (EASteamLauncher had already
+  gone), and the next start from Steam worked both times.
+- 2026-11-20 20:51-20:52 (player, build 18:59): level-up "ужасно работает".
+  Attributes: Up from Сила gave "list go 0 of 6 -> missing", Down from Сила воли
+  "Конец списка", Телосложение never reached. Cause (FFDec characterrecord.gfx
+  SharedLibrary.OptimizedList): in Dragon Age II m_nNumVisibleEntries counts only
+  the rows on screen, NumEntries is the full count after the list's Filter, and
+  with a Filter ListItemIndex is the unfiltered data index (Сила = 1) while
+  VisibleListIndex is the place on screen; the agent read the Origins meaning.
+  Fix agent v36 (A.ListCount, A.ListPos, ListGo by place, pitch ItemHeight +
+  Spacing). Abilities: inside a tree Up/Down said only "Конец/Начало списка"
+  (every icon of a tree sits in one AbilityChainContainer_mc, one chain); Left/
+  Right worked. Fix menu.cpp MoveInSection: with one chain on the screen Up/Down
+  step through it. Both built and deployed 21:2x, NOT tested. Check: attributes
+  list 1 из 6 to 6 из 6 with Телосложение, points still added to the right row;
+  in a tree Up/Down go icon by icon; Origins inventory still counts "N из M".

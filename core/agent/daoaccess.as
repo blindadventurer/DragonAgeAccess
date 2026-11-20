@@ -12,7 +12,7 @@
 //   button  : any clip with SimulateButtonPush, or a plain onRelease handler
 
 var A = new Object();
-A.ver = 35;  // 35: codex names, long texts by paragraph, money alerts, pause state; 34: button labels not listed twice, DA2 ability trees; 33: DA2 attribute rows
+A.ver = 36;  // 36: DA2 list rows by NumEntries and VisibleListIndex; 35: codex names, long texts by paragraph, money alerts, pause state; 34: button labels not listed twice, DA2 ability trees; 33: DA2 attribute rows
 _global.DAOAccess = A;
 
 A.Clean = function(s) {
@@ -433,12 +433,12 @@ A.Line = function(c, kind) {
     // (m_bStickyButtonEnabled false) on purpose; the container says whether it
     // is enabled (ElementContainer.IsEnabled, Enable/Disable).
     if (A.IsAccordion(c)) en = c.m_mcElementContainer.IsEnabled() ? "1" : "0";
-    // Rows of a SharedLibrary.OptimizedList (inventory, containers, store): only the
-    // rows on screen exist, reused while scrolling; their place in the whole list
-    // (ListItemIndex of m_nNumVisibleEntries, which holds the full count) goes along.
+    // Rows of a SharedLibrary.OptimizedList (inventory, containers, store, DA2
+    // attributes): only the rows on screen exist, reused while scrolling; their
+    // place in the whole list (A.ListPos of A.ListCount) goes along.
     var lp = "";
-    if (c.List != undefined && c.ListItemIndex != undefined && c.List.m_nNumVisibleEntries != undefined)
-        lp = c.ListItemIndex + "/" + c.List.m_nNumVisibleEntries;
+    if (c.List != undefined && c.ListItemIndex != undefined && !isNaN(A.ListCount(c.List)))
+        lp = A.ListPos(c) + "/" + A.ListCount(c.List);
     return targetPath(c) + "\t" + kind + "\t" + label + "\t" + value + "\t" +
         Math.round(p.x) + "\t" + Math.round(p.y) + "\t" + en + "\t" + lp + "\n";
 };
@@ -447,14 +447,33 @@ A.Line = function(c, kind) {
 // screen (YPosition, whose listeners move the list and re-fill the reused rows:
 // OptimizedList.OnScroll -> SynchronizeList), then returns that entry's path, or
 // "edge" when index is outside the list, or "missing".
+// Two versions of OptimizedList. Origins (inventory.gfx, 2026-11-18):
+// m_nNumVisibleEntries is the full count and ListItemIndex the place in it.
+// Dragon Age II (characterrecord.gfx and others, FFDec 2026-11-20): NumEntries is
+// the full count after the list's Filter, m_nNumVisibleEntries only the rows on
+// screen, and with a Filter ListItemIndex is the index in the unfiltered data while
+// VisibleListIndex is the place the player sees (RefreshEntry). Read as the Origins
+// version, the DA2 attribute list lost its last row (Телосложение) and its first
+// row was "missing" (log 2026-11-20 20:51).
+A.ListCount = function(L) {
+    if (L.NumEntries != undefined) return Number(L.NumEntries);
+    return Number(L.m_nNumVisibleEntries);
+};
+A.ListPos = function(e) {
+    if (e.List.Filter != undefined && e.List.Filter != null && e.VisibleListIndex != undefined)
+        return Number(e.VisibleListIndex);
+    return Number(e.ListItemIndex);
+};
+
 A.ListGo = function(path, index) {
     var c = eval(path);
     if (c == undefined || c.List == undefined) return "missing";
     var L = c.List;
-    var n = Number(L.m_nNumVisibleEntries);
+    var n = A.ListCount(L);
     var i = Number(index);
     if (isNaN(i) || i < 0 || i >= n) return "edge";
-    var pitch = Number(L.ItemHeight) + 2;
+    // Row pitch: Origins ItemHeight + 2 (proven); DA2 ItemHeight + Spacing (InitSync).
+    var pitch = Number(L.ItemHeight) + ((L.NumEntries != undefined && L.Spacing != undefined) ? Number(L.Spacing) : 2);
     var view = L._parent.Viewport_mc._height;
     var y = Number(L.YPosition.GetValue());
     var ny = y;
@@ -465,7 +484,7 @@ A.ListGo = function(path, index) {
     var e;
     while (k < L.m_aVisibleEntries.length) {
         e = L.m_aVisibleEntries[k];
-        if (e != undefined && e != null && Number(e.ListItemIndex) == i) return targetPath(e);
+        if (e != undefined && e != null && A.ListPos(e) == i) return targetPath(e);
         k++;
     }
     return "missing";
