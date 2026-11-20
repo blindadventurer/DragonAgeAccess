@@ -71,7 +71,10 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   Published as a normal release (commit 3df691d, title "0.3.0 (тестовая
   версия)"); proven the same evening: the installer test build found v0.3.0 through
   releases/latest and downloaded and unpacked both zips (/check:DAOAccess,
-  /check:DA2Access). Next: fixes from tester reports and the player's play.
+  /check:DA2Access). Later that night (player: "Да, и опубликовать") the asset was
+  replaced by installer 1.4 (Origins Steam launch option, see Decisions; 373 760
+  bytes, SHA-256 77aa1491...6a1, the downloaded asset checked against it), release
+  notes and README updated. Next: fixes from tester reports and the player's play.
 - 2026-11-20: the player switched both games to Steam (F:\SteamLibrary; the old GOG
   Origins and the old Dragon Age II folders in F:\games are deleted, together with
   the mod files in them). Both Steam exes are the same builds (same PE stamp) wrapped
@@ -231,8 +234,8 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   steamlaunch=<account>|<options before>; removal puts the old options back (in the
   "вернуть настройки" question) only where they still start the game exe.
   Proven on the player's PC 2026-11-20 21:50 (test log): Steam closed and reopened,
-  option written, game started without the launcher. Not in a GitHub release yet
-  (the published installer is still 1.3).
+  option written, game started without the launcher. Published as the installer
+  asset of v0.3.0 the same night.
 - Nothing else is needed on a tester's PC: the mod and prism.dll import only Windows
   DLLs (pefile 2026-11-20: no Visual C++ runtime; Prism delay-loads the PC-Talker,
   ZDSR and BoyPC client DLLs only for those readers).
