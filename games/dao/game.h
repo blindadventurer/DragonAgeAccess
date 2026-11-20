@@ -41,6 +41,25 @@ static const SteamUnwrap kSteamUnwrap = {
     "400c2c9e97bb1a534121553be66f202429ef6f7320c93c86f9b7a491864647bd",
     "b74dca7a1b1b69f9242d94afb47b2f67e8c655df89914352cca7d31f76dd8f45"};
 
+// Russian text (installer, setup.cpp RussianText). A translation in the override
+// folder (ENPY's lies in override\enpy) is not enough: the game falls back to English
+// unless its install folder holds packages\core\data\talktables\core_<Locale>.tlk
+// (strings of the decrypted exe; Locale=ru-ru alone was written back to en-us,
+// 2026-11-20 14:01). Copying these six talk tables from the translation into the
+// install folder and Locale=ru-ru in DragonAge.ini [GameOptions] gave Russian text
+// (proven 2026-11-20 14:54, NOTEBOOK.md). The files are the player's own; we never ship
+// them (ENPY terms). files[0] is the one the game checks.
+struct RuText { const wchar_t* ini; const wchar_t* page; const wchar_t* files[6]; };
+static const RuText kRuText = {
+    L"Settings\\DragonAge.ini",
+    L"https://enpy.net/projects/localizations/games/dragon_age_origins/",
+    {L"packages\\core\\data\\talktables\\core_ru-ru.tlk",
+     L"packages\\core\\data\\talktables\\core_ru-ru_f.tlk",
+     L"packages\\core_ep1\\data\\talktables\\core_ep1_ru-ru.tlk",
+     L"packages\\core_ep1\\data\\talktables\\core_ep1_ru-ru_f.tlk",
+     L"modules\\single player\\data\\talktables\\singleplayer_ru-ru.tlk",
+     L"modules\\single player\\data\\talktables\\singleplayer_ru-ru_f.tlk"}};
+
 // HKLM keys (32-bit view) with the install folder. GOG games are found through the
 // GOG registry keys in the installer (proven on the player's PC). This BioWare key is
 // a HYPOTHESIS (the Dragon Age 2 installer writes BioWare\Dragon Age 2\Path); a key

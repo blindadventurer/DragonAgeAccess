@@ -20,6 +20,8 @@ struct GameInfo {
     std::vector<GameBuild> builds;
     std::vector<GameReg> regs;
     std::string unwrapFrom, unwrapResult;  // SHA-256 of the Steam exe and of its 4 GB copy
+    std::wstring ruIni, ruPage;            // Russian text: settings file in Documents\<docs>, translation page
+    std::vector<std::wstring> ruFiles;     // talk tables copied into the install folder
 };
 
 #define GAME_INFO_BODY(keyText)                                                    \
@@ -38,7 +40,10 @@ struct GameInfo {
         for (const auto& r : kRegPaths) g.regs.push_back({r.key, r.value});        \
         if (kSteamUnwrap.wrappedSha) g.unwrapFrom = kSteamUnwrap.wrappedSha;       \
         if (kSteamUnwrap.resultSha) g.unwrapResult = kSteamUnwrap.resultSha;       \
-        return g;                                                                \
+        if (kRuText.ini) g.ruIni = kRuText.ini;                                    \
+        if (kRuText.page) g.ruPage = kRuText.page;                                 \
+        for (const wchar_t* f : kRuText.files) if (f) g.ruFiles.push_back(f);      \
+        return g;                                                              \
     }
 
 namespace dao_game {

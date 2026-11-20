@@ -9,7 +9,8 @@
 // game exe is not a proven build; replaces a foreign dinput8.dll only with consent;
 // copies the files; offers the 4 GB memory flag (Large Address Aware; for the Steam
 // Origins exe through Steamless, SteamUnwrapWork) and freeing
-// Page Up / Page Down from the camera; writes bin_ship\scripts\<Mod>\install.txt
+// Page Up / Page Down from the camera; Origins: Russian text from a translation
+// already in the override folder (RussianText); writes bin_ship\scripts\<Mod>\install.txt
 // (version, files, loader hash) for later updates and removal.
 //
 // Only standard Windows dialogs (message boxes and task dialogs with named buttons),
@@ -39,7 +40,7 @@
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' " \
                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-static const wchar_t kSetupVersion[] = L"1.2";
+static const wchar_t kSetupVersion[] = L"1.3";
 static const wchar_t kDefaultRepo[] = L"blindadventurer/DragonAgeAccess";
 // Ultimate ASI Loader 9.7.4 x86 dinput8.dll (NOTEBOOK.md): recognised as ours when an
 // older install has no install.txt.
@@ -871,7 +872,14 @@ static Paths MakePaths(const GameInfo& g, const std::wstring& game) {
 }
 
 // bin_ship\scripts\<Mod>\install.txt: what this installer put there.
-struct Record { bool ok = false; std::wstring version; std::string loaderSha; std::vector<std::wstring> files; };
+// rufile= talk tables this installer copied into the install folder (Russian text),
+// locale= the Locale value before it set ru-ru (kept across updates).
+struct Record {
+    bool ok = false, localeRec = false;
+    std::wstring version, oldLocale;
+    std::string loaderSha;
+    std::vector<std::wstring> files, ruFiles;
+};
 
 static Record ReadRecord(const Paths& p) {
     Record r;
@@ -889,12 +897,162 @@ static Record ReadRecord(const Paths& p) {
         if (line.compare(0, 8, L"version=") == 0) r.version = line.substr(8);
         else if (line.compare(0, 8, L"dinput8=") == 0) r.loaderSha = Narrow(line.substr(8));
         else if (line.compare(0, 5, L"file=") == 0) r.files.push_back(line.substr(5));
+        else if (line.compare(0, 7, L"rufile=") == 0) r.ruFiles.push_back(line.substr(7));
+        else if (line.compare(0, 7, L"locale=") == 0) { r.localeRec = true; r.oldLocale = line.substr(7); }
     }
     return r;
 }
 
 static std::wstring Dest(const Paths& p, const std::wstring& entry) {  // "bin:x" / "ovr:x"
     return (entry.compare(0, 4, L"ovr:") == 0 ? p.override_ : p.bin) + L"\\" + entry.substr(4);
+}
+
+// ---------------------------------------------------------------- Russian text
+
+// Locale= of the [GameOptions] section in DragonAge.ini (ASCII, CRLF). False when the
+// file cannot be read (the game never started); locale empty when the line is missing.
+static bool ReadLocale(const std::wstring& ini, std::wstring& locale) {
+    locale.clear();
+    std::string data;
+    if (!ReadAll(ini, data)) return false;
+    size_t pos = 0;
+    while (pos < data.size()) {
+        size_t end = data.find('\n', pos);
+        if (end == std::string::npos) end = data.size();
+        std::string line = data.substr(pos, end - pos);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.compare(0, 7, "Locale=") == 0) { locale = Widen(line.substr(7)); return true; }
+        pos = end + 1;
+    }
+    return true;
+}
+
+// Writes Locale=<value>: replaces the line, or adds it under [GameOptions].
+static bool SetLocale(const std::wstring& ini, const std::wstring& value, std::wstring& err) {
+    std::string data;
+    if (!ReadAll(ini, data)) { err = ErrText(GetLastError()); return false; }
+    std::string line = "Locale=" + Narrow(value);
+    size_t at = data.compare(0, 7, "Locale=") == 0 ? 0 : data.find("\nLocale=");
+    if (at != std::string::npos) {
+        if (at > 0) at++;
+        size_t end = data.find_first_of("\r\n", at);
+        data.replace(at, (end == std::string::npos ? data.size() : end) - at, line);
+    } else {
+        size_t h = data.find("[GameOptions]");
+        if (h == std::string::npos) data = "[GameOptions]\r\n" + line + "\r\n" + data;
+        else {
+            size_t end = data.find('\n', h);
+            if (end == std::string::npos) data += "\r\n" + line + "\r\n";
+            else data.insert(end + 1, line + "\r\n");
+        }
+    }
+    return WriteAll(ini, data.data(), data.size(), err);
+}
+
+// A translation already on the PC: the override folder itself or a folder one level
+// below it (ENPY's is override\enpy) that holds the main talk table (ruFiles[0]).
+static std::wstring FindRuText(const GameInfo& g, const Paths& p) {
+    if (g.ruFiles.empty()) return L"";
+    if (FileExists(p.override_ + L"\\" + g.ruFiles[0])) return p.override_;
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW((p.override_ + L"\\*").c_str(), &fd);
+    std::wstring found;
+    if (h != INVALID_HANDLE_VALUE) {
+        do {
+            std::wstring n = fd.cFileName;
+            if (n == L"." || n == L".." || !(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+            if (FileExists(p.override_ + L"\\" + n + L"\\" + g.ruFiles[0])) { found = p.override_ + L"\\" + n; break; }
+        } while (FindNextFileW(h, &fd));
+        FindClose(h);
+    }
+    return found;
+}
+
+// Offers Russian game text (Origins, NOTEBOOK.md Decisions): when a translation lies
+// in the override folder and the game folder has no Russian talk tables of its own,
+// copies the missing talk tables into the game folder (never over a file) and sets
+// Locale=ru-ru (DragonAge.ini backed up as .before-access). Without a translation on
+// a Russian Windows it offers to open the translation's page. Adds rufile= / locale=
+// lines to the record so removal can undo it.
+static void RussianText(const GameInfo& g, const Paths& p, const Record& old, std::string& record, std::wstring& report) {
+    std::vector<std::wstring> ruFiles = old.ruFiles;
+    std::wstring oldLocale = old.oldLocale;
+    bool localeRec = old.localeRec;
+    auto finish = [&]() {
+        for (const std::wstring& f : ruFiles) record += "rufile=" + Narrow(f) + "\r\n";
+        if (localeRec) record += "locale=" + Narrow(oldLocale) + "\r\n";
+    };
+    if (g.ruFiles.empty()) return finish();
+    std::wstring ini = p.gameDocs + L"\\" + g.ruIni, err, locale;
+    bool iniOk = ReadLocale(ini, locale);
+    std::wstring src = FindRuText(g, p), main = p.game + L"\\" + g.ruFiles[0];
+    Log(L"Russian text: translation " + (src.empty() ? std::wstring(L"not found") : src) + L", Locale=" +
+        (iniOk ? locale : std::wstring(L"(no DragonAge.ini)")));
+    if (src.empty()) {
+        // Only on a Russian Windows, and only when the game has no Russian text itself.
+        if (!g_ru || g_auto || FileExists(main) || (iniOk && Lower(locale) == L"ru-ru")) return finish();
+        int r = Ask(g.title + L": включить русский текст игры?\n\nВ этой версии игры нет русского языка. Русский перевод делает команда ENPY, его нужно скачать с их сайта и установить по их инструкции: файлы перевода ложатся в папку Документы\\BioWare\\Dragon Age\\packages\\core\\override. После этого запустите установщик ещё раз, и он включит русский текст.\n\nОткрыть страницу перевода в браузере?",
+                    MB_YESNO | MB_ICONQUESTION, IDNO);
+        if (r == IDYES) ShellExecuteW(nullptr, L"open", g.ruPage.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        report += L"\n- русский текст не включён: перевод ENPY не найден в папке override";
+        return finish();
+    }
+    // A Russian talk table that is not the translation's is the game's own: leave it.
+    if (FileExists(main) && FileSha256(main) != FileSha256(src + L"\\" + g.ruFiles[0])) {
+        Log(L"Russian text: the game has its own " + main + L", left alone");
+        return finish();
+    }
+    std::vector<std::wstring> missing;
+    for (const std::wstring& f : g.ruFiles)
+        if (FileExists(src + L"\\" + f) && !FileExists(p.game + L"\\" + f)) missing.push_back(f);
+    bool needLocale = !iniOk || Lower(locale) != L"ru-ru";
+    if (missing.empty() && !needLocale) return finish();
+    if (missing.empty() && !iniOk) {
+        report += T(L"\n- русский текст: игра ещё ни разу не запускалась. Запустите игру один раз, выйдите из неё и запустите установщик ещё раз, чтобы выбрать русский язык",
+                    L"\n- Russian text: the game has never started. Start it once, quit, and run the installer again to choose Russian");
+        return finish();
+    }
+    int r = Ask(g.title + T(L": включить русский текст игры?\n\nНайден перевод в папке ",
+                            L": turn on Russian game text?\n\nA translation was found in ") +
+                    src + T(L". Игра показывает его, только когда файлы текста лежат и в папке игры, поэтому установщик скопирует туда ",
+                            L". The game shows it only when its text files also lie in the game folder, so the installer copies ") +
+                    std::to_wstring(missing.size()) +
+                    T(L" файлов текста (ничего не заменяя) и выберет в настройках игры русский язык текста. Озвучка останется прежней. Копия файла настроек сохранится как DragonAge.ini.before-access.",
+                      L" text files there (replacing nothing) and sets the game's text language to Russian. The voice stays as it is. The settings file is backed up as DragonAge.ini.before-access."),
+                MB_YESNO | MB_ICONQUESTION, IDYES);
+    if (r != IDYES) {
+        report += T(L"\n- русский текст не включён", L"\n- Russian text left off");
+        return finish();
+    }
+    std::wstring failed;
+    for (const std::wstring& f : missing) {
+        std::wstring dest = p.game + L"\\" + f;
+        MakeDirs(Parent(dest));
+        if (CopyFileW((src + L"\\" + f).c_str(), dest.c_str(), TRUE)) {
+            Log(L"copied " + dest);
+            ruFiles.push_back(f);
+        } else {
+            Log(L"FAILED " + ErrText(GetLastError()) + L": " + dest);
+            failed += L" " + FileName(f);
+        }
+    }
+    bool localeDone = !needLocale;
+    if (needLocale && iniOk) {
+        Backup(ini, ini + L".before-access");
+        localeDone = SetLocale(ini, L"ru-ru", err);
+        Log(L"Locale ru-ru " + std::wstring(localeDone ? L"set" : L"FAILED " + err) + L" in " + ini);
+        if (localeDone && !localeRec) { localeRec = true; oldLocale = locale; }
+    }
+    if (!failed.empty())
+        report += T(L"\n- русский текст: не удалось скопировать файлы", L"\n- Russian text: could not copy") + failed;
+    else if (!iniOk)
+        report += T(L"\n- русский текст: файлы скопированы, но игра ещё ни разу не запускалась. Запустите игру один раз, выйдите из неё и запустите установщик ещё раз, чтобы выбрать русский язык",
+                    L"\n- Russian text: files copied, but the game has never started. Start it once, quit, and run the installer again to choose Russian");
+    else if (!localeDone)
+        report += T(L"\n- русский текст: не удалось изменить настройки игры: ", L"\n- Russian text: could not change the game settings: ") + err;
+    else
+        report += T(L"\n- русский текст игры включён", L"\n- Russian game text is on");
+    finish();
 }
 
 static std::wstring Install(const GameInfo& g, const Paths& p, const Package& pkg, bool& ok) {
@@ -1035,6 +1193,8 @@ static std::wstring Install(const GameInfo& g, const Paths& p, const Package& pk
         } else report += T(L"\n- доступ к 4 ГБ памяти не включён", L"\n- 4 GB of memory left off");
     }
 
+    RussianText(g, p, old, record, report);
+
     // Page Up / Page Down. Without the settings file (the game never started yet) the
     // answer goes into install.txt as freekeys=1: the mod frees the keys itself, once,
     // as soon as the game has written the file (core\src\main.cpp FreeZoomKeysOnce).
@@ -1110,11 +1270,29 @@ static std::wstring Uninstall(const GameInfo& g, const Paths& p) {
         if (!exeBack) Log(L"exe backup is another build, kept as it is");
     }
     bool keysBack = FileExists(p.keys) && ZoomKeys(p.keys, false, false, err) > 0;
-    if (exeBack || keysBack) {
+    bool ruBack = !rec.ruFiles.empty() || rec.localeRec;
+    if (exeBack || keysBack || ruBack) {
         int r = Ask(g.title + T(L": вернуть игре и исходные настройки?\n", L": also put the game's settings back?\n") +
                         (exeBack ? T(L"\n- Исходный файл игры без доступа к 4 ГБ памяти.", L"\n- The original game exe without 4 GB of memory.") : L"") +
-                        (keysBack ? T(L"\n- Клавиши Page Up и Page Down снова управляют камерой.", L"\n- Page Up and Page Down zoom the camera again.") : L""),
+                        (keysBack ? T(L"\n- Клавиши Page Up и Page Down снова управляют камерой.", L"\n- Page Up and Page Down zoom the camera again.") : L"") +
+                        (ruBack ? T(L"\n- Прежний язык текста игры: файлы русского текста, скопированные установщиком в папку игры, удаляются. Сам перевод в папке override остаётся.",
+                                    L"\n- The former game text language: the Russian text files the installer copied into the game folder are deleted. The translation in the override folder stays.") : L""),
                     MB_YESNO | MB_ICONQUESTION, IDYES);
+        if (r == IDYES && ruBack) {
+            for (const std::wstring& f : rec.ruFiles) {
+                std::wstring dest = p.game + L"\\" + f;
+                if (FileExists(dest)) Log((DeleteFileW(dest.c_str()) ? L"deleted " : L"delete FAILED ") + dest);
+            }
+            bool done = true;
+            if (rec.localeRec) {
+                std::wstring ini = p.gameDocs + L"\\" + g.ruIni;
+                std::wstring back = rec.oldLocale.empty() ? L"en-us" : rec.oldLocale;
+                done = SetLocale(ini, back, err);
+                Log(L"Locale " + back + (done ? L" restored" : L" restore FAILED " + err));
+            }
+            report += done ? T(L"\n- прежний язык текста игры возвращён", L"\n- the former game text language is back")
+                           : T(L"\n- не удалось вернуть язык текста игры", L"\n- could not put the game text language back");
+        }
         if (r == IDYES) {
             if (exeBack) {
                 bool ok = CopyFileW(backupExe.c_str(), p.exe.c_str(), FALSE) != 0;

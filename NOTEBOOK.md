@@ -57,7 +57,14 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   DA2Access-0.3.0.zip with agent v35 and everything under Status above, global.ini
   in the Dragon Age II zip. The same evening the installer asset of v0.3.0 was
   replaced by installer 1.2 (Steam Origins 4 GB through Steamless; the mod zips
-  unchanged, so no new mod version). Released while the agent v33-v35 changes were still
+  unchanged, so no new mod version), then by installer 1.3 (Origins Russian text: a
+  translation in override\ or one folder below it holding core_ru-ru.tlk is found,
+  the missing talk tables of kRuText (games\dao\game.h) are copied into the game
+  folder, never over a file, and Locale=ru-ru set in DragonAge.ini with a
+  .before-access backup; record lines rufile= / locale=<old>, kept across updates;
+  removal offers the former language back; a game with its own different
+  core_ru-ru.tlk is left alone; with no translation, on a Russian Windows only, it
+  offers to open ENPY's page). Released while the agent v33-v35 changes were still
   untested in a game (player's choice: testers and the player test the release).
   Published as a normal release (commit 3df691d, title "0.3.0 (тестовая
   версия)"); proven the same evening: the installer test build found v0.3.0 through
@@ -143,7 +150,7 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   проверяет GitHub и обновляет мод"): one installer for both games,
   core\installer\setup.cpp (games_table.h takes both games' names from their game.h),
   built by build_setup.ps1 into DragonAgeAccess-Setup.exe (installer version
-  kSetupVersion, 1.2 since 2026-11-20 evening). It holds no mod files and is rebuilt only when its code
+  kSetupVersion, 1.3 since 2026-11-20 evening). It holds no mod files and is rebuilt only when its code
   changes. Steps: finds both games (installer folder, HKLM BioWare keys, GOG keys,
   Steam libraries, EA / Origin / GOG default folders) and asks in a task dialog with
   named command buttons: each game (with its folder or "not found"), both, or a
@@ -200,7 +207,7 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   downloading Steamless 3.1.0.5 from github.com/atom0s/Steamless (pinned version and
   SHA-256; CC BY-NC-ND, so never shipped by us) to unwrap a copy of the exe on the
   player's PC, then LAA (as games\dao\tools\make_laa_exe.py), original kept as
-  .before-laa; Russian text by finding the ENPY files already on the PC
+  .before-laa; Russian text (DONE in installer 1.3, setup.cpp RussianText) by finding the ENPY files already on the PC
   (Documents\...\override\enpy) and copying the six talk tables into the game folder
   plus Locale=ru-ru (ENPY files are not ours to ship: enpy.net/license/ forbids
   placing them anywhere without the editors' consent; the player chose 2026-11-20
@@ -312,3 +319,10 @@ One line per test of the shared parts; in-game tests go in the game's notebook.
   exe proven in the game; report "4 ГБ включён". Second run: "уже был включён".
   /uninstall: Steam exe restored byte for byte (400c2c9e...47bd). Dragon Age II
   copy: LAA not offered, as before. All as expected.
+- 2026-11-20 ~21:00 (Claude, scratch folder): installer 1.3 test build, Origins copy
+  with the six ENPY talk tables in docs\...\override\enpy and DragonAge.ini at
+  Locale=en-us: six files copied into the game folder, Locale=ru-ru (VOLanguage
+  kept), rufile= x6 and locale=en-us recorded; reinstall asked nothing and kept the
+  record; /uninstall deleted the six files and wrote Locale=en-us back (the ini then
+  byte-identical to its backup). The no-translation question (Russian Windows, not
+  /auto) not seen yet; no dialog tried with NVDA.

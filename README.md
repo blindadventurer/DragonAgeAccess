@@ -52,6 +52,10 @@ Dragon Age: Origins:
 ```
 
 - В Steam-версии нет русского текста. Русский перевод делает команда ENPY: https://enpy.net/projects/localizations/games/dragon_age_origins/
+  - Установите перевод по инструкции ENPY: его файлы ложатся в папку Документы\BioWare\Dragon Age\packages\core\override.
+  - Потом запустите наш установщик. Он найдёт перевод и спросит, включить ли русский текст. Если согласиться, он скопирует шесть файлов текста в папку игры, без которых игра не показывает русский язык, и выберет в настройках игры русский язык текста. Озвучка останется английской.
+  - Если перевода ещё нет, установщик предложит открыть страницу ENPY в браузере.
+  - При удалении мода установщик предложит вернуть прежний язык.
 - Доступ к 4 ГБ памяти: файл игры в Steam защищён, и если просто включить в нём 4 ГБ, игра перестаёт запускаться. Поэтому установщик спросит, скачать ли программу Steamless 3.1.0.5 (автор atom0s) с её страницы на GitHub. Если согласиться, он снимет ею защиту с копии файла игры, включит в копии 4 ГБ и поставит её вместо исходного файла, а исходный сохранит рядом как DAOrigins.exe.before-laa. Каждый шаг проверяется по контрольным суммам, и в игру попадает только проверенный файл. Если Steam обновит игру или проверит её файлы, он вернёт защищённый файл: тогда запустите установщик ещё раз.
 
 Dragon Age II:
@@ -177,7 +181,7 @@ Both games: an object scanner with distance and direction by category (character
 "C:\Program Files (x86)\Steam\steamapps\common\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe" %command%
 ```
 
-- Origins on Steam has no Russian text; the ENPY team makes the Russian translation: https://enpy.net/projects/localizations/games/dragon_age_origins/
+- Origins on Steam has no Russian text; the ENPY team makes the Russian translation: https://enpy.net/projects/localizations/games/dragon_age_origins/ . Install it as ENPY describes (its files go into Documents\BioWare\Dragon Age\packages\core\override), then run our installer: it finds the translation and offers to turn Russian text on (it copies the six talk tables the game needs into the game folder and sets Locale=ru-ru; the voice stays English). Removing the mod offers to put the former language back.
 - 4 GB of memory: the Steam exe is protected, and setting the flag on it alone stops the game from starting. For Origins from Steam the installer offers to download Steamless 3.1.0.5 (by atom0s) from its GitHub release, unwrap a copy of the exe, set the flag in the copy and put it in place, keeping the original as DAOrigins.exe.before-laa; every step is checked by SHA-256 and only the proven file reaches the game. If Steam updates or verifies the game, it brings the protected file back: run the installer again. Dragon Age II from Steam or the EA app gets no 4 GB flag.
 - Dragon Age II runs through the EA app; sign in to your EA account on the in-game sign-in screen (the mod reads it, and never speaks or logs the password) to enable the DLC.
 

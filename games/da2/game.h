@@ -29,6 +29,10 @@ static const ProvenBuild kProvenBuilds[] = {
 struct SteamUnwrap { const char* wrappedSha; const char* resultSha; };
 static const SteamUnwrap kSteamUnwrap = {nullptr, nullptr};
 
+// No Russian text step in the installer for Dragon Age II.
+struct RuText { const wchar_t* ini; const wchar_t* page; const wchar_t* files[6]; };
+static const RuText kRuText = {nullptr, nullptr, {}};
+
 // HKLM keys (32-bit view) with the install folder. Proven on the player's PC
 // 2026-11-19: SOFTWARE\WOW6432Node\BioWare\Dragon Age 2, value Path.
 struct RegPath { const wchar_t* key; const wchar_t* value; };
