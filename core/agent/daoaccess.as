@@ -12,26 +12,28 @@
 //   button  : any clip with SimulateButtonPush, or a plain onRelease handler
 
 var A = new Object();
-A.ver = 30;  // 30: one agent for both games (Origins v28 + Dragon Age II v29)
+A.ver = 35;  // 35: codex names, long texts by paragraph, money alerts, pause state; 34: button labels not listed twice, DA2 ability trees; 33: DA2 attribute rows
 _global.DAOAccess = A;
 
 A.Clean = function(s) {
     if (s == undefined || s == null) return "";
     s = String(s);
-    var out = "";
-    var i = 0;
-    var c;
-    while (i < s.length) {
-        c = s.charAt(i);
-        if (c == "\t" || c == "\n" || c == "\r") c = " ";
-        out += c;
-        i++;
-    }
+    // split/join, not a character loop: building the string one character at a
+    // time froze Dragon Age II for 45 s on its privacy policy (LoginViewTOS, a text
+    // of tens of thousands of characters, log 2026-11-20 13:49).
+    if (s.indexOf("\t") >= 0) s = s.split("\t").join(" ");
+    if (s.indexOf("\r") >= 0) s = s.split("\r").join(" ");
+    if (s.indexOf("\n") >= 0) s = s.split("\n").join(" ");
     // trim
-    while (out.length > 0 && out.charAt(0) == " ") out = out.substr(1);
-    while (out.length > 0 && out.charAt(out.length - 1) == " ") out = out.substr(0, out.length - 1);
-    return out;
+    var a = 0;
+    var b = s.length;
+    while (a < b && s.charAt(a) == " ") a++;
+    while (b > a && s.charAt(b - 1) == " ") b--;
+    return (a == 0 && b == s.length) ? s : s.substring(a, b);
 };
+
+// Longest screen text handed to the mod (a privacy policy or licence is cut).
+A.maxText = 3000;
 
 // Text of a SharedLibrary.TextField clip or of a plain TextField.
 // A button the agent can press (SimulateButtonPush or onRelease).
@@ -116,6 +118,25 @@ A.AbilityState = function(ab) {
     return "avail";
 };
 
+A.IsAttrRow = function(c) {
+    return c.m_mcStatPlus != undefined && c.m_mcStatMinus != undefined && c.ListItemIndex != undefined &&
+        _global.CharacterRecord != undefined && typeof(_global.CharacterRecord.ChangeAttribute) == "function";
+};
+
+// Value of an attribute row: "15, Урон 12, свободных очков 2" (the matching stat
+// and, while points can be spent or taken back, the points left).
+A.AttrValue = function(c) {
+    var CR = _global.CharacterRecord;
+    var v = String(c.m_nAttributeData);
+    if (c.m_sMatchingStatName != undefined && c.m_sMatchingStatName != "")
+        v += ", " + A.StripTags(c.m_sMatchingStatName) + " " + c.m_sMatchingStatData;
+    if (CR.IsAttributeSpendingEnabled() || CR.HasCurrentCharSpentPoints()) {
+        var left = (_global.CreatureUtils != undefined) ? _global.CreatureUtils.GetCharacterAttributePoints() : "?";
+        v += ", свободных очков " + left;
+    }
+    return v;
+};
+
 A.Kind = function(c) {
     if (c._name.indexOf("DragArea") >= 0) return "";  // chargen model rotation area
     // Inventory, store and container items (SharedLibrary.Item): ObjectID, Name,
@@ -152,7 +173,28 @@ A.Kind = function(c) {
     // Value with -/+ buttons (chargen AttributeAdjuster: Label_mc, PointsLabel_mc).
     if (typeof(c.Minus_mc.SimulateButtonPush) == "function" &&
         typeof(c.Plus_mc.SimulateButtonPush) == "function") return "spin";
+    // Dragon Age II character record attribute row (characterrecord.gfx
+    // AttributesEntry): its +/- buttons show only under the mouse and call
+    // CharacterRecord.ChangeAttribute; Left / Right do the same through Adjust.
+    if (A.IsAttrRow(c)) return "spin";
+    // Dragon Age II ability tree (abilities.gfx AbilityClassContainer, name in
+    // m_sClassName): a button while the trees are shown side by side
+    // (AlmightyContainer.InChainSelection); once one is opened, its ability icons
+    // are listed instead (it was one "без подписи" button hiding them, test 15:35).
+    if (c.m_mcChainContainer != undefined && c.m_nGUIType != undefined && typeof(c.GetName) == "function") {
+        if (typeof(c._parent.InChainSelection) == "function" && c._parent.InChainSelection() != true) return "";
+        return "button";
+    }
     if (c.PickerButton_mc != undefined) return "picker";
+    // Codex (journal.gfx CodexEntry, CodexGroup): an entry not found yet (catalogue
+    // <list>.N.Locked, the game greys it) cannot be read, so it is left out (player's
+    // choice 2026-11-20; the group says how many are found). A group's
+    // expand button is a "group", read with the group's name.
+    if (A.IsCodexEntry(c)) {
+        if (Number(A.Val(c.m_sEntryData + ".Locked")) != 0 || c.enabled == false) return "skip";
+        return "radio";
+    }
+    if (A.IsCodexGroupButton(c)) return "group";
     if (typeof(c.SimulateButtonPush) == "function") {
         if (c.m_bToggleButtonEnabled != undefined) return "toggle";
         if (c.m_bStickyButtonEnabled != undefined) return (c._name.indexOf("Tab") >= 0) ? "tab" : "radio";
@@ -160,6 +202,39 @@ A.Kind = function(c) {
     }
     if (typeof(c.onRelease) == "function") return "button";
     return "";
+};
+
+A.IsCodexEntry = function(c) {
+    return typeof(c.UpdateDescription) == "function" && c.m_sEntryData != undefined && c.m_sResRef != undefined;
+};
+
+A.IsCodexGroupButton = function(c) {
+    var g = c._parent;
+    return g.m_nCodexGroup != undefined && g.Button_mc == c && typeof(g.ShowChildren) == "function" &&
+        g.m_sEntryData != undefined;
+};
+
+// The codex list scrolls inside a mask (ScrollingCodexList_mc.Scrollable_mc): its
+// rows moved above the top of the screen were dropped and the whole list was read
+// before the journal's tabs and Close (tester log 2026-11-20 18:33: stuck on the
+// first row). Rows are placed as if the list were not scrolled. Returns the
+// position, or undefined outside that list.
+A.UnscrolledPos = function(c) {
+    var s = c._parent;
+    var d = 0;
+    while (s != undefined && d < 8) {
+        if (s._name == "Scrollable_mc" && s._parent._name == "ScrollingCodexList_mc") break;
+        s = s._parent;
+        d++;
+    }
+    if (s == undefined || d >= 8) return undefined;
+    var p = new Object();
+    p.x = 0;
+    p.y = 0;
+    c.localToGlobal(p);
+    s.globalToLocal(p);
+    s._parent.localToGlobal(p);
+    return p;
 };
 
 // Label kept outside the button: a sibling named like the button with "Button"
@@ -182,6 +257,7 @@ A.Line = function(c, kind) {
     if (label == "") label = A.SiblingLabel(c);
     // Tooltip text of icon-only buttons (Behaviour.DisplayTooltip.TooltipSource).
     if (label == "" && typeof(c.TooltipSource) == "string") label = A.Clean(c.TooltipSource);
+    if (label == "" && typeof(c.m_sClassName) == "string") label = A.StripTags(c.m_sClassName);  // DA2 ability tree
     // Character creation icons (CharGenButton): the choice's name on its target,
     // as text or as a talk-table string id resolved by the game's own lookup.
     if (label == "" && c.oTarget != undefined) {
@@ -195,6 +271,10 @@ A.Line = function(c, kind) {
         if (c.SliderNumber_mc != undefined) {
             label = "Количество";
             value = A.TextOf(c.SliderNumber_mc).split(" / ").join(" из ");
+        }
+        if (A.IsAttrRow(c)) {
+            if (c.m_sEntryName != undefined && c.m_sEntryName != "") label = A.StripTags(c.m_sEntryName);
+            value = A.AttrValue(c);
         }
         if (value == "") value = A.TextOf(c.PointsLabel_mc);
         if (value == "") value = A.TextOf(c.Value_mc);
@@ -260,6 +340,44 @@ A.Line = function(c, kind) {
         label = A.SlotName(c.m_nSlotID);
         value = (Number(c.m_nItemID) != 0) ? A.StripTags(A.Val(c.m_sSlotToken + ".Name")) : "";
     }
+    // Codex: the entry's name (the game shows only its number, the name is the
+    // tooltip), the group's name with how many entries are found and whether it is
+    // open (read before as "1 / 69, флажок", tester log 2026-11-20 18:32).
+    if (A.IsCodexEntry(c)) {
+        var cn = A.StripTags(A.Val(c.m_sEntryData + ".Name"));
+        if (cn != "") label = cn;
+        if (Number(A.Val(c.m_sEntryData + ".Updated")) != 0) label += ", новое";
+    } else if (kind == "group") {
+        var g = c._parent;
+        var gn = A.StripTags(A.Val(g.m_sEntryData + ".Name"));
+        if (gn != "") label = gn;
+        var total = Number(_global.ExternalCommands.GetNumMembers(g.m_sEntryData + ".CodexList"));
+        var found = 0;
+        var gi = 0;
+        while (gi < total) {
+            if (Number(A.Val(g.m_sEntryData + ".CodexList." + gi + ".Locked")) == 0) found++;
+            gi++;
+        }
+        value = "найдено " + found + " из " + total + (g.m_bShowingChildren == true ? ", развёрнуто" : ", свёрнуто");
+        if (Number(A.Val(g.m_sEntryData + ".Updated")) != 0) value += ", есть новое";
+    }
+    // Notifications (notifications.gfx Alert): the money alert writes the coins as
+    // pictures ("Получено 1 <silver> 76 <copper>"), so only the bare numbers were
+    // heard (player 2026-11-20). The amount in copper is <Token>.IntegerArg. The value
+    // carries "type|token" for the mod's log (what an items alert holds is not known yet).
+    if (c.Token != undefined && c.Type != undefined && typeof(c.StartFadingOut) == "function") {
+        var at = Number(c.Type);
+        if (at == 5) {
+            var amount = Number(A.Val(c.Token + ".IntegerArg"));
+            var word = label;
+            var cut = 0;
+            while (cut < word.length && (word.charAt(cut) < "0" || word.charAt(cut) > "9")) cut++;
+            word = A.Clean(word.substr(0, cut));
+            if (word == "") word = (amount < 0) ? "Потеряно" : "Получено";
+            if (!isNaN(amount) && amount != 0) label = word + " " + A.Money(Math.abs(amount));
+        }
+        value = at + "|" + c.Token;
+    }
     if (label == "" && typeof(c.sName) == "string") label = A.StripTags(c.sName);
     // Party portraits (DA2 characterrecord / inventory SharedLibrary.Portrait, token
     // Party.Members.N set by GUIPortraits.MakePortraitInitFunction): a picture only,
@@ -300,10 +418,13 @@ A.Line = function(c, kind) {
             if (c.m_nIndex == WM.m_nActiveQuestIndex) value += (value == "" ? "" : ", ") + "цель задания";
         }
     }
-    var p = new Object();
-    p.x = 0;
-    p.y = 0;
-    c.localToGlobal(p);
+    var p = A.UnscrolledPos(c);
+    if (p == undefined) {
+        p = new Object();
+        p.x = 0;
+        p.y = 0;
+        c.localToGlobal(p);
+    }
     var en = (c.enabled == false || c.m_bStickyButtonEnabled == false ||
               c.m_bToggleButtonEnabled == false) ? "0" : "1";
     if (c.m_sPinToken != undefined) en = "1";  // the pin's state is in its value
@@ -352,13 +473,69 @@ A.ListGo = function(path, index) {
 
 // A text field outside any widget: plain screen text (titles, descriptions,
 // dialog messages) or an input box. Empty, hidden or off-screen ones give "".
+// The label clip of a button kept beside it (newgame.gfx GameLabel0_mc next to
+// GameButton0_mc): the button already reads that text (SiblingLabel), so the label
+// itself is not listed again. Listed twice, the player pressed Enter on the label
+// and nothing happened (Origins new game, 2026-11-20 15:57).
+A.IsButtonLabel = function(mc) {
+    var n = mc._name;
+    var i = n.indexOf("Label");
+    if (i < 0) return false;
+    var b = mc._parent[n.substr(0, i) + "Button" + n.substr(i + 5)];
+    return b != undefined && b._visible != false && A.Kind(b) != "";
+};
+
+// A long text with line breaks (a codex entry, a quest description, a tutorial) is
+// handed out one paragraph per line, so the arrows step through it paragraph by
+// paragraph; read whole, the player could only hear it again from the start (codex,
+// tester log 2026-11-20 18:33). Paragraph 1 keeps the field's own path, the others
+// get "#2", "#3"... (never eval'ed: text lines are only read).
+A.paraMin = 300;
+
+A.Paragraphs = function(raw) {
+    var s = String(raw);
+    if (s.indexOf("\r") >= 0) s = s.split("\r").join("\n");
+    var parts = s.split("\n");
+    var out = new Array();
+    var i = 0;
+    var p;
+    while (i < parts.length) {
+        p = A.Clean(parts[i]);
+        if (p != "") out.push(p);
+        i++;
+    }
+    return out;
+};
+
 A.TextLine = function(mc, k, tf) {
     if (tf._visible == false || tf._alpha == 0) return "";
+    if (tf.type != "input" && A.IsButtonLabel(mc)) return "";
     var t = A.Clean(tf.text);
+    // The same TextField under two member names (codex description: TextField and
+    // m_mcTextField) was listed and spoken twice (tester log 2026-11-20 18:32).
+    if (tf.type != "input" && t != "") {
+        var tkey = targetPath(mc) + "\t" + t;
+        if (A.seenText[tkey] == true) return "";
+        A.seenText[tkey] = true;
+    }
     // Bare numbers next to an icon get the meaning of their clip (inventory stats).
     var lab = A.StatLabel(mc._name);
     if (lab != "" && t != "") t = lab + " " + t;
     var kind = (tf.type == "input") ? "edit" : "text";
+    if (kind == "text" && lab == "" && t.length >= A.paraMin) {
+        var paras = A.Paragraphs(tf.text);
+        if (paras.length > 1) return A.ParaLines(mc, k, tf, paras);
+    }
+    if (kind == "text" && t.length > A.maxText)
+        t = t.substr(0, A.maxText) + " ... текст обрезан, всего " + t.length + " знаков";
+    // A password box (Dragon Age II EA sign-in) never hands its text out: only the
+    // number of characters, as the value.
+    var val = "";
+    if (kind == "edit" && tf.password == true) {
+        kind = "password";
+        val = String(tf.text.length);
+        t = "";
+    }
     if (t == "" && kind == "text") return "";
     var path = targetPath(mc) + "." + k;
     if (A.seen[path] == true) return "";
@@ -368,7 +545,31 @@ A.TextLine = function(mc, k, tf) {
     p.y = tf._y;
     mc.localToGlobal(p);
     if (p.x + tf._width / 2 <= 0 || p.y + tf._height / 2 <= 0) return "";
-    return path + "\t" + kind + "\t" + t + "\t\t" + Math.round(p.x) + "\t" + Math.round(p.y) + "\t1\n";
+    return path + "\t" + kind + "\t" + t + "\t" + val + "\t" + Math.round(p.x) + "\t" + Math.round(p.y) + "\t1\n";
+};
+
+// One text line per paragraph, all at the field's position (the mod keeps their
+// order: equal positions stay in the order given).
+A.ParaLines = function(mc, k, tf, paras) {
+    var path = targetPath(mc) + "." + k;
+    if (A.seen[path] == true) return "";
+    A.seen[path] = true;
+    var p = new Object();
+    p.x = tf._x;
+    p.y = tf._y;
+    mc.localToGlobal(p);
+    if (p.x + tf._width / 2 <= 0 || p.y + tf._height / 2 <= 0) return "";
+    var out = "";
+    var i = 0;
+    var t;
+    while (i < paras.length) {
+        t = paras[i];
+        if (t.length > A.maxText) t = t.substr(0, A.maxText) + " ... абзац обрезан, всего " + t.length + " знаков";
+        out += path + (i == 0 ? "" : "#" + (i + 1)) + "\ttext\t" + t + "\t\t" + Math.round(p.x) + "\t" +
+            Math.round(p.y) + "\t1\n";
+        i++;
+    }
+    return out;
 };
 
 // inList: inside an open picker list, where every button is a list entry.
@@ -406,7 +607,10 @@ A.Walk = function(mc, depth, skip, inList) {
         if (kind != "") {
             // Off the left or top edge of the screen (slid-out panels).
             b = c.getBounds(_level0);
-            if ((b.xMin + b.xMax) / 2 <= 0 || (b.yMin + b.yMax) / 2 <= 0) { A.offscreen++; continue; }
+            if (((b.xMin + b.xMax) / 2 <= 0 || (b.yMin + b.yMax) / 2 <= 0) && A.UnscrolledPos(c) == undefined) {
+                A.offscreen++;
+                continue;
+            }
             if (inList && (kind == "button" || kind == "tab" || kind == "radio")) kind = "entry";
             out += A.Line(c, kind);
             if (kind == "picker") out += A.Walk(c, depth + 1, "PickerButton_mc", true);
@@ -420,6 +624,7 @@ A.Walk = function(mc, depth, skip, inList) {
 // Returns one line per visible widget or text: path, kind, label, value, x, y, enabled.
 A.Scan = function() {
     A.seen = new Object();
+    A.seenText = new Object();
     A.offscreen = 0;
     return A.Walk(_level0, 0, "", false);
 };
@@ -428,10 +633,25 @@ A.Scan = function() {
 // without the floating names of every creature in a big battle).
 A.ScanUnder = function(path) {
     A.seen = new Object();
+    A.seenText = new Object();
     A.offscreen = 0;
     var c = eval(path);
     if (c == undefined || c._visible != true || c._alpha <= 0) return "";
     return A.Walk(c, 1, "", false);
+};
+
+// The pause sign of FloatyLayer, from the game's own state: the sign follows
+// Client.Paused (floatylayer.gfx PauseIndicator_mc observer), but its animation
+// made the scan lose it for a moment, so "Пауза снята" / "Пауза" came every few
+// seconds while paused (tester log 2026-11-20 18:46). Returns the sign's line when
+// paused, "" when not, "?" when the state cannot be read (then the mod scans the sign).
+A.PauseLine = function() {
+    var v = _global.ExternalCommands.GetValue("Client.Paused");
+    if (v == undefined || v == null || String(v) == "") return "?";
+    if (!(v == true || String(v) == "1" || String(v) == "true")) return "";
+    var t = A.FindText(_level0.PauseIndicator_mc, 0);
+    if (t == "") t = "Пауза";
+    return "_level0.PauseIndicator_mc\ttext\t" + t + "\t\t0\t0\t1\n";
 };
 
 // A button of a SharedLibrary.Accordion list (ElementButton: knows its container).
@@ -510,12 +730,14 @@ A.Hover = function(path, enter) {
 };
 
 // Keyboard focus into a text input (path of the TextField), all text selected so
-// typing replaces it. Unfocus() gives the focus back.
-A.Focus = function(path) {
+// typing replaces it; mode "end" puts the caret after the text instead (the cursor
+// arriving on a field). Unfocus() gives the focus back.
+A.Focus = function(path, mode) {
     var tf = eval(path);
     if (tf == undefined) return "missing";
     Selection.setFocus(tf);
-    Selection.setSelection(0, tf.text.length);
+    if (mode == "end") Selection.setSelection(tf.text.length, tf.text.length);
+    else Selection.setSelection(0, tf.text.length);
     return (Selection.getFocus() != null) ? "ok" : "nofocus";
 };
 
@@ -532,6 +754,20 @@ A.Adjust = function(path, dir) {
         if (dir > 0) c.UpArrow_mc.SimulateButtonPush();
         else c.DownArrow_mc.SimulateButtonPush();
         return A.TextOf(c.Value_mc);
+    }
+    if (A.IsAttrRow(c)) {
+        // As the row's own +/- buttons (AttributesEntry.StatPlus_mc / StatMinus_mc),
+        // with the checks that decide whether the game shows them.
+        var CR = _global.CharacterRecord;
+        var i = Number(c.ListItemIndex) - 1;
+        if (dir > 0) {
+            if (!CR.IsAttributeSpendingEnabled()) return "nopoints";
+            CR.ChangeAttribute(i, CR.POINTS_INCREMENT);
+        } else {
+            if (!CR.AttributeHasPointsSpent(i)) return "nospent";
+            CR.ChangeAttribute(i, CR.POINTS_DECREMENT);
+        }
+        return "ok " + A.AttrValue(c);
     }
     if (c.Plus_mc != undefined) {
         // Spin: the game's own +/- press. The result names the button state, so a
@@ -650,15 +886,15 @@ A.Batch = function() {
 
 A.StripTags = function(s) {
     s = A.Clean(s);
-    var out = "";
-    var inTag = false;
-    var i = 0;
-    var c;
-    while (i < s.length) {
-        c = s.charAt(i);
-        if (c == "<") inTag = true;
-        else if (c == ">") inTag = false;
-        else if (!inTag) out += c;
+    if (s.indexOf("<") < 0) return s;
+    // Text before the first tag, then after each tag's ">" (no character loop: see Clean).
+    var parts = s.split("<");
+    var out = parts[0];
+    var i = 1;
+    var gt;
+    while (i < parts.length) {
+        gt = parts[i].indexOf(">");
+        if (gt >= 0) out += parts[i].substr(gt + 1);
         i++;
     }
     return A.Clean(out);

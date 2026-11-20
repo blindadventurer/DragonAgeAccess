@@ -30,9 +30,53 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   release\DragonAgeAccess-Setup.exe (the one installer, no mod files inside).
 - Names per game: Origins DAOAccess / daoaccess.gfx / Documents\BioWare\Dragon Age;
   Dragon Age II DA2Access / da2access.gfx / Documents\BioWare\Dragon Age 2.
+- testers logs\ (since 2026-11-20, git-ignored: other people's play, names and
+  typed text): mod logs the player collects from testers. The game notebooks' test
+  logs say which tester log a finding came from.
 
 ## Status
 
+- 2026-11-20 evening: agent v35 (shared core\agent and menu.cpp) built for both
+  games, deployed to both (deploy.ps1, 2026-11-20 evening), NOT tested: Origins codex readable (games\dao\NOTEBOOK.md,
+  Stages, Codex, money and pause v1), money alerts in coins, pause from the game's
+  state. Also in Dragon Age II, check there: long texts (300+ characters with
+  line breaks) now come one paragraph per item, a text shown twice in one clip is
+  listed once, the pause line (DAOAccess.PauseLine falls back to the old sign scan
+  when Client.Paused cannot be read).
+
+- 2026-11-20 14:55: both Steam games work with the mod on the player's PC (menus,
+  scanner, conversations in Origins; menus, EA sign-in, DLC, a save loaded in
+  Dragon Age II), Origins with LAA (Steamless exe) and Russian text (ENPY talk
+  tables). Done 2026-11-20 evening: the Steam builds in kProvenBuilds (Origins
+  0xa49000 wrapped / 0x9ed000 Steamless, Dragon Age II 0xbd2000, re-read from the
+  player's exes with pe.py that evening), README notes for Steam players, release
+  v0.3.0 (next item).
+- 2026-11-20 evening, release v0.3.0 (player: "собрать новый релиз и новый
+  установщик ... запушить, дальше дорабатывать по отзывам тестировщиков"): installer
+  1.1 (Steam builds proven, no LAA on wrapped exes), DAOAccess-0.3.0.zip and
+  DA2Access-0.3.0.zip with agent v35 and everything under Status above, global.ini
+  in the Dragon Age II zip. Released while the agent v33-v35 changes were still
+  untested in a game (player's choice: testers and the player test the release).
+  Next: fixes from tester reports and the player's play.
+- 2026-11-20: the player switched both games to Steam (F:\SteamLibrary; the old GOG
+  Origins and the old Dragon Age II folders in F:\games are deleted, together with
+  the mod files in them). Both Steam exes are the same builds (same PE stamp) wrapped
+  by store DRM; the mod's addresses were re-proven from the files (game notebooks,
+  Game and Proven facts). Changes for Steam, built, NOT yet tested in a game: the
+  installer leaves a DRM-wrapped exe alone (no LAA offer), deploy.ps1 and the
+  research tools point to the Steam folders. The new build is in both Steam games
+  (deploy.ps1, 2026-11-20 12:53). First test 12:55: neither mod started. Origins:
+  the Steam launcher hides its Play button from OCR, so the game never ran; way
+  round it is a Steam launch option (games\dao\NOTEBOOK.md, Game), set for the
+  player 13:07, Origins test pending. Dragon Age II: the game ran, the mod did not
+  load; with bin_ship\scripts\global.ini (DontLoadFromDllMain=0, Dragon Age II only,
+  games\da2\loader\global.ini, shipped by deploy.ps1 and make_release.ps1) it
+  loaded and read the menus (13:03). The README needs the Steam launch option for
+  Origins players once it is proven. Found on the way and fixed in both games:
+  the mode vtable hooks patched past the end of the vtables (see Pitfalls). The
+  Steam builds go into kProvenBuilds only after the in-game test (player's choice).
+  The release v0.2.0 still has the old installer and the old slot counts: a new
+  release follows the test.
 - Merge done 2026-11-19 and built for both games; NOT tested in either game yet.
   Dragon Age II code is unchanged apart from names (diff review of every file);
   Origins now also runs what was added for Dragon Age II. Check in the first test of
@@ -94,7 +138,7 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   проверяет GitHub и обновляет мод"): one installer for both games,
   core\installer\setup.cpp (games_table.h takes both games' names from their game.h),
   built by build_setup.ps1 into DragonAgeAccess-Setup.exe (installer version
-  kSetupVersion, 1.0). It holds no mod files and is rebuilt only when its code
+  kSetupVersion, 1.1 since release v0.3.0). It holds no mod files and is rebuilt only when its code
   changes. Steps: finds both games (installer folder, HKLM BioWare keys, GOG keys,
   Steam libraries, EA / Origin / GOG default folders) and asks in a task dialog with
   named command buttons: each game (with its folder or "not found"), both, or a
@@ -118,6 +162,37 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   /gamekey:dao|da2|all, /uninstall, /game:, /docs:, /source:<zip or folder>,
   /repo:<owner/name>, /check:<Mod>; build_setup.ps1 -AsInvoker makes a test build
   without the UAC window.
+- 2026-11-20 (player): the installer does not offer the 4 GB (LAA) flag for an exe
+  wrapped by store DRM (entry point outside the first section: PeInfo.wrapped in
+  setup.cpp); the report says why. Reason: the code of both Steam exes is encrypted
+  on disk, and players report Steam Origins no longer starting (error code 51) after
+  the 4GB patch (Steam community / Nexus posts found 2026-11-20). For Origins on
+  the player's PC the exe was unwrapped with Steamless and given LAA by hand
+  (games\dao\tools\make_laa_exe.py, games\dao\NOTEBOOK.md Game folder changes); the
+  installer does not do this.
+- 2026-11-20 (after a password reached the log): what is typed into input fields is
+  never logged. SpeakPrivate (speech.cpp) speaks but logs "<скрыто>"; item lines of
+  a non-empty "edit" field log "<скрыто>"; edit start / text / end log only the
+  length. Password fields (TextField.password, agent v31 kind "password") are never
+  spoken either: "звёздочка" per character, the field says "N симв.". Typing focus
+  follows the cursor (menu.cpp StartTyping / StopTyping): arriving on a field
+  focuses it with the caret at the end, Up / Down / Tab leave it, Enter finishes
+  (and the game gets that Enter), Enter on a finished field types again with the
+  old text selected. Built, deployed 2026-11-20, NOT tested in a game yet; check in
+  Origins too (character name, save name).
+- 2026-11-20 (player), for the next release, in this order: (1) Dragon Age II
+  level-up made accessible (attribute points, abilities; "Авто. уровень" is the
+  stopgap); (2) installer, Origins on Steam, each with a question: 4 GB memory by
+  downloading Steamless 3.1.0.5 from github.com/atom0s/Steamless (pinned version and
+  SHA-256; CC BY-NC-ND, so never shipped by us) to unwrap a copy of the exe on the
+  player's PC, then LAA (as games\dao\tools\make_laa_exe.py), original kept as
+  .before-laa; Russian text by finding the ENPY files already on the PC
+  (Documents\...\override\enpy) and copying the six talk tables into the game folder
+  plus Locale=ru-ru (ENPY files are not ours to ship: enpy.net/license/ forbids
+  placing them anywhere without the editors' consent; the player chose 2026-11-20
+  not to ask for now; without them the installer offers to open
+  https://enpy.net/projects/localizations/games/dragon_age_origins/ in the browser
+  to download the translation, and to run the installer again afterwards); (3) Steam builds in kProvenBuilds, release, README.
 - Nothing else is needed on a tester's PC: the mod and prism.dll import only Windows
   DLLs (pefile 2026-11-20: no Visual C++ runtime; Prism delay-loads the PC-Talker,
   ZDSR and BoyPC client DLLs only for those readers).
@@ -144,6 +219,18 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   through the GOG key; unknown build and missing key file messages. NOT tested: the
   dialogs with NVDA, the folder picker, a Steam or EA app install, a standard user
   elevating with another account (Documents would then be that account's).
+- Installer and Steam, proven 2026-11-20 (test build /find and /auto on copies of the
+  Steam exes in a scratch folder): /find finds Steam Origins through
+  HKLM\SOFTWARE\BioWare\Dragon Age\Path (32-bit view; the key the Steam install
+  writes) and Steam Dragon Age II through the Steam libraries
+  (F:\SteamLibrary\steamapps\common\Dragon Age II); both exes are logged as
+  "wrapped (DRM stub)", the unknown-build question comes up, LAA is not offered and
+  the exe stays byte-identical.
+- Log size (core\src\log.cpp, scanner.cpp; checked 2026-11-20): at game start a
+  log over 20 MB becomes <Mod>.old.log (replacing the older one), so at most two
+  logs stay; the objdump file is capped at 6 MB. Growth seen: about 1.1-1.6 MB for
+  5 hours of play (player and tester logs 2026-11-20), mostly the perf line every
+  10 s and the memory line every 30 s.
 - KeyBindings.ini of both games (Documents\BioWare\<game>\Settings, ASCII, CRLF):
   ZoomIn_1=Keyboard::Button_Next and ZoomOut_1=Keyboard::Button_Prior by default
   (both files read 2026-11-19).
@@ -154,8 +241,33 @@ games\da2\NOTEBOOK.md (Dragon Age II).
 
 - Bash heredocs here lose backslashes inside Python string literals; write such
   scripts to a file with the Write tool and run them from there.
+- The mod logs every spoken line and every item it reads: anything private shown
+  or typed on screen ends up in the log unless it goes through SpeakPrivate and
+  the masked item line. 2026-11-20 13:05 an EA password typed into the e-mail box
+  was logged in plain text; Claude masked the typed values in DA2Access.log the
+  same day (scratchpad scrub.py) and told the player.
+- Scaleform's ActionScript is slow at building strings one character at a time
+  (each += copies the string): the agent's Clean did that and froze Dragon Age II
+  for 45 s on its privacy policy (2026-11-20). Use split/join and substring in the
+  agent, never a character loop over screen text; texts over A.maxText (3000) are
+  cut. The perf line ("worst call N ms in <movie>") is where such stalls show.
+- sed -i in Git Bash rewrites CRLF files with LF (the whole file shows as changed in
+  git diff), and heredoc appends add LF lines. The repository mixes both (the game
+  notebooks and objects.cpp are CRLF; NOTEBOOK.md, menu.cpp, speech.cpp, the agent
+  are LF): keep each file's own endings. Prefer the Edit tool.
 - Compress-Archive of PowerShell 5.1 writes zip entries with backslashes, which some
   extractors do not take as folders: make_release.ps1 uses tar.exe -a instead.
+- Vtable slot counts (both games' objects.cpp, PatchVtable): a vtable in .rdata is
+  followed by other data, often UTF-16 strings, whose dwords (0x6E0049 for "In")
+  fall inside the exe's address range, so the InExe check passes them. A count that
+  is too high silently overwrites game strings. Count the slots by reading the
+  vtable up to the first entry that is not a function (proven counts: Origins
+  explore 32, combat 32, party picker 30; Dragon Age II explore 36, combat 36; the
+  old 39 / 39 / 42 overwrote "Target Required", "LockedPartyMembers", "InCombatMode").
+- Store copies of both games encrypt the exe's code on disk (Steam SteamStub in
+  Origins, EA's wrapper in Dragon Age II): reading .text from the file gives noise
+  (entropy 8.0). .rdata and .data are plain. Origins can be decrypted with Steamless
+  (games\dao\work\DAOrigins.unpacked.exe); Dragon Age II has no decrypted copy.
 - The installer needs administrator rights; a test run from a non-elevated shell
   fails with ERROR_ELEVATION_REQUIRED, so tests use build_setup.ps1 -AsInvoker.
 
@@ -171,3 +283,11 @@ One line per test of the shared parts; in-game tests go in the game's notebook.
   games from the 0.2.0 zips, freekeys=1 recorded. All as expected. A bug found and
   fixed: a failed download listed files under an empty path, i.e. the drive root;
   ListFiles and DeleteTree now refuse paths that are not absolute or are a root.
+- 2026-11-20 (Claude, scratch folder): installer test build on copies of the Steam
+  exes of both games: found, "wrapped (DRM stub)", LAA not offered, exe unchanged.
+  As expected.
+- 2026-11-20 19:36 (Claude, scratch folder): installer 1.1 test build, /auto with
+  /source:DA2Access-0.3.0.zip on a copy of the Steam DragonAge2.exe: no unknown-build
+  question (Steam build now proven), global.ini copied, LAA not offered, freekeys
+  recorded. The Origins run stopped at "game running: DAOrigins.exe" (the player
+  was playing): the running-game check works; the Origins copy was not installed.

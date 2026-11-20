@@ -1,6 +1,9 @@
 import pefile, struct, sys, re
 from capstone import *
-EXE="F:/games/Dragon Age - Origins/bin_ship/DAOrigins.exe"
+# The Steam exe has its code encrypted (SteamStub); research reads the copy decrypted
+# by Steamless (games\dao\work, not in git; see NOTEBOOK.md, Game).
+import os
+EXE=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "work", "DAOrigins.unpacked.exe")
 pe=pefile.PE(EXE,fast_load=True); IB=pe.OPTIONAL_HEADER.ImageBase
 d=pe.__data__ if hasattr(pe,'__data__') else open(EXE,'rb').read()
 d=bytes(d)

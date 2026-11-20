@@ -38,7 +38,7 @@
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' " \
                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-static const wchar_t kSetupVersion[] = L"1.0";
+static const wchar_t kSetupVersion[] = L"1.1";
 static const wchar_t kDefaultRepo[] = L"blindadventurer/DragonAgeAccess";
 // Ultimate ASI Loader 9.7.4 x86 dinput8.dll (NOTEBOOK.md): recognised as ours when an
 // older install has no install.txt.
@@ -529,7 +529,12 @@ static bool GetPackage(const GameInfo& g, Package& pkg, std::wstring& err) {
 
 // ---------------------------------------------------------------- game exe
 
-struct PeInfo { bool ok = false; DWORD ts = 0, size = 0; WORD chars = 0; };
+// wrapped: the entry point lies outside the first section, i.e. a DRM stub runs
+// first and decrypts the code (Steam's SteamStub ".bind" in Origins, EA's wrapper in
+// Dragon Age II, both proven on the Steam copies 2026-11-20). Such an exe must not be
+// changed: players report "failed to start (error code 51)" after setting LAA on the
+// Steam Origins exe.
+struct PeInfo { bool ok = false, wrapped = false; DWORD ts = 0, size = 0; WORD chars = 0; };
 
 static PeInfo ReadPe(const std::wstring& path) {
     PeInfo pe;
@@ -548,6 +553,12 @@ static PeInfo ReadPe(const std::wstring& path) {
     pe.ts = nt->FileHeader.TimeDateStamp;
     pe.size = nt->OptionalHeader.SizeOfImage;
     pe.chars = nt->FileHeader.Characteristics;
+    auto* sec = IMAGE_FIRST_SECTION(nt);
+    if (nt->FileHeader.NumberOfSections > 0 && (const char*)(sec + 1) <= buf + got) {
+        DWORD entry = nt->OptionalHeader.AddressOfEntryPoint;
+        DWORD span = max(sec->Misc.VirtualSize, sec->SizeOfRawData);
+        pe.wrapped = entry < sec->VirtualAddress || entry >= sec->VirtualAddress + span;
+    }
     return pe;
 }
 
@@ -814,7 +825,8 @@ static std::wstring Install(const GameInfo& g, const Paths& p, const Package& pk
     ok = false;
     std::wstring head = g.modTitle + L" " + pkg.version + L", " + g.title + L":\n";
     PeInfo pe = ReadPe(p.exe);
-    Log(L"exe " + p.exe + L" ts=" + Hex(pe.ts) + L" size=" + Hex(pe.size) + L" chars=" + Hex(pe.chars));
+    Log(L"exe " + p.exe + L" ts=" + Hex(pe.ts) + L" size=" + Hex(pe.size) + L" chars=" + Hex(pe.chars) +
+        (pe.wrapped ? L" wrapped (DRM stub)" : L""));
     bool proven = false;
     std::wstring names;
     for (const GameBuild& b : g.builds) {
@@ -893,6 +905,10 @@ static std::wstring Install(const GameInfo& g, const Paths& p, const Package& pk
     // 4 GB memory flag.
     if (pe.ok && (pe.chars & IMAGE_FILE_LARGE_ADDRESS_AWARE)) {
         report += T(L"\n- доступ к 4 ГБ памяти уже был включён", L"\n- 4 GB of memory was already on");
+    } else if (pe.ok && pe.wrapped) {
+        Log(L"LAA not offered: the exe is wrapped by a DRM stub");
+        report += T(L"\n- доступ к 4 ГБ памяти не включён: файл игры защищён магазином (Steam или EA), после изменения игра может не запуститься",
+                    L"\n- 4 GB of memory left off: the game file is protected by its store (Steam or EA) and may not start once changed");
     } else if (pe.ok) {
         int r = Ask(g.title + T(L": включить игре доступ к 4 ГБ памяти?\n\nБез этого игра работает у предела в 2 ГБ и может вылетать в больших локациях. Меняется один флаг в файле ",
                                 L": give the game access to 4 GB of memory?\n\nWithout it the game runs at its 2 GB limit and may crash in large areas. One flag changes in ") +

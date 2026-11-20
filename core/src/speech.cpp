@@ -22,7 +22,8 @@ decltype(&prism_version_string) p_version_string;
 std::wstring g_modDir;
 std::mutex g_mutex;
 std::condition_variable g_cv;
-std::deque<std::pair<std::wstring, bool>> g_queue;
+struct Line { std::wstring text; bool interrupt, secret; };
+std::deque<Line> g_queue;
 
 template <class T> bool Resolve(HMODULE m, T& fn, const char* name) {
     fn = reinterpret_cast<T>(GetProcAddress(m, name));
@@ -52,17 +53,18 @@ DWORD WINAPI SpeechThread(LPVOID) {
     LogLine(L"speech: backend " + Widen(p_backend_name(backend)));
 
     for (;;) {
-        std::pair<std::wstring, bool> item;
+        Line item;
         {
             std::unique_lock<std::mutex> lock(g_mutex);
             g_cv.wait(lock, [] { return !g_queue.empty(); });
             item = std::move(g_queue.front());
             g_queue.pop_front();
         }
-        std::string utf8 = Utf8(item.first);
-        PrismError r = p_output(backend, utf8.c_str(), item.second);
-        LogLine(L"speak [" + std::wstring(item.second ? L"interrupt" : L"queue") + L"] \"" + item.first +
-                L"\" -> " + Widen(p_error_string(r)));
+        std::string utf8 = Utf8(item.text);
+        PrismError r = p_output(backend, utf8.c_str(), item.interrupt);
+        LogLine(L"speak [" + std::wstring(item.interrupt ? L"interrupt" : L"queue") + L"] " +
+                (item.secret ? std::wstring(L"<скрыто>") : L"\"" + item.text + L"\"") + L" -> " +
+                Widen(p_error_string(r)));
     }
 }
 
@@ -74,12 +76,16 @@ void SpeechStart(const std::wstring& modDir) {
     if (t) CloseHandle(t);
 }
 
-void Speak(const std::wstring& text, bool interrupt) {
+static void Queue(const std::wstring& text, bool interrupt, bool secret) {
     if (text.empty()) return;
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         if (interrupt) g_queue.clear();
-        g_queue.emplace_back(text, interrupt);
+        g_queue.push_back(Line{text, interrupt, secret});
     }
     g_cv.notify_one();
 }
+
+void Speak(const std::wstring& text, bool interrupt) { Queue(text, interrupt, false); }
+
+void SpeakPrivate(const std::wstring& text, bool interrupt) { Queue(text, interrupt, true); }

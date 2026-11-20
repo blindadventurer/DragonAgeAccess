@@ -1,7 +1,9 @@
 """Helpers over DragonAge2.exe: address conversion, xrefs, call graph, vtables."""
 import pefile, struct, re
 from capstone import Cs, CS_ARCH_X86, CS_MODE_32
-EXE = "F:/games/Dragon Age 2.v 1.04 + 16 DLC/bin_ship/DragonAge2.exe"
+# The Steam exe (EA wrapper) has its .text encrypted on disk: only .rdata / .data
+# (vtables, strings) read correctly from it; code needs a decrypted copy (none yet).
+EXE = "F:/SteamLibrary/steamapps/common/Dragon Age II/bin_ship/DragonAge2.exe"
 pe = pefile.PE(EXE, fast_load=True); IB = pe.OPTIONAL_HEADER.ImageBase
 d = open(EXE, 'rb').read()
 secs = [(s.Name.rstrip(b'\0').decode(), s.VirtualAddress, s.PointerToRawData, s.SizeOfRawData, s.Misc_VirtualSize) for s in pe.sections]

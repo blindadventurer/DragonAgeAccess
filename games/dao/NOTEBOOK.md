@@ -9,25 +9,47 @@
 ## Game
 
 - Name: Dragon Age: Origins - Ultimate Edition
-- Store and install folder: GOG (id 1949616134), F:\games\Dragon Age - Origins
-- Main executable: F:\games\Dragon Age - Origins\bin_ship\DAOrigins.exe
-  (10 217 312 bytes). DAOriginsLauncher.exe at the root is only the launcher
-  (the GOG play task starts it); DAOriginsConfig.exe is the settings tool.
-- Build proven on: DAOrigins.exe FileVersion 1.05.13263.0, PE TimeDateStamp
-  0x4eb19d53, SizeOfImage 0x9ec0a2, SHA-256
+- Store and install folder (since 2026-11-20): Steam app 47810 (build id
+  21245176), F:\SteamLibrary\steamapps\common\Dragon Age Ultimate Edition. The
+  earlier GOG copy (id 1949616134, F:\games\Dragon Age - Origins) is deleted.
+- Main executable: ...\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe
+  (10 594 144 bytes, SHA-256
+  400c2c9e97bb1a534121553be66f202429ef6f7320c93c86f9b7a491864647bd).
+  DAOriginsLauncher.exe at the root is the launcher ("Launcher Application"
+  1.1.0.14, native, does not import or mention dinput8, so the mod cannot touch
+  it); Steam starts it. Test 2026-11-20: the player's OCR found no Play button in
+  it, and the game did not start (DragonAge.ini not rewritten after 12:33). Way
+  round it, from Steam community posts: Steam game properties, launch options
+  "F:\SteamLibrary\steamapps\common\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe" %command%
+  (Steam then runs the game exe, the launcher path becomes an argument;
+  proven 2026-11-20 13:12: the mod log shows that command line). Set 2026-11-20 13:07 by Claude with the player's
+  permission (see Game folder changes, settings). DAOriginsConfig.exe the settings tool; bin_ship\DAUpdater.exe registers the DLC (it ran 2026-11-20,
+  Documents\DAO Ultimate Addins Updater.log).
+- Steam build: same code as the GOG build, wrapped by SteamStub variant 2.1
+  (section .bind, entry point 0x9ED2EE in it, .text encrypted on disk). PE stamp
+  0x4eb19d53 (same), SizeOfImage 0xa49000, no LAA (Characteristics 0x102).
+  In kProvenBuilds since release v0.3.0, together with the Steamless + LAA copy
+  (SizeOfImage 0x9ed000, Characteristics 0x122; both read from the player's files
+  2026-11-20 evening).
+  Proven same layout 2026-11-20: its sections .text .rdata .data .tls .rsrc .reloc
+  have the GOG addresses (.reloc ends at 0x9EC0A2 = the GOG SizeOfImage); the
+  Steamless 3.1.0.5 copy (games\dao\work\DAOrigins.unpacked.exe, not in git, SHA-256
+  df7af157...e186) is exactly 10 217 312 bytes like the GOG exe (its hash differs,
+  header fields only presumably; the GOG file is gone, no byte diff possible); every
+  address of the mod checked in it (Proven facts, Steam).
+- Earlier build proven on (GOG): DAOrigins.exe FileVersion 1.05.13263.0, PE
+  TimeDateStamp 0x4eb19d53, SizeOfImage 0x9ec0a2, SHA-256
   2346caee611002d4dff6ecef68eb315b63a37004dd98b39c11a9c26c0b45bfb3
-  (GOG build 2.1.1.5). Since 2026-11-17 22:20 the exe carries the Large
-  Address Aware flag (Characteristics 0x102 -> 0x122, checksum updated, same
-  stamp; new SHA-256 3b157d9010a01b64f86ab5af52d7d400718a29bd67b4f415d143dbad453572bb);
-  the original is bin_ship\DAOrigins.exe.before-laa (hash above).
+  (GOG build 2.1.1.5), with the LAA flag set from 2026-11-17.
 - 32 or 64 bit: 32-bit (PE Machine 0x14c).
 - Engine family (one of: unity-mono, unity-il2cpp, unreal, godot, gamemaker,
   rpgmaker-web-vn, dotnet-custom, native-custom, script-extender-engines,
   emulation, scripted, other): native-custom
 - Engine and version: family native-custom, BioWare Eclipse engine 1.05.13263.0.
   UI is Scaleform GFx. Middleware: FMOD Ex, PhysX, SpeedTree, Umbra, Bink.
-- Anti-cheat or DRM: none. GOG build is DRM-free (PCGamingWiki), single-player
-  only, no anti-cheat files in the install folder.
+- Anti-cheat or DRM: no anti-cheat, single-player. The Steam exe carries SteamStub
+  (see above); changing the exe (LAA) is reported to stop it starting (error 51),
+  so the Steam copy runs without the 4 GB flag. The GOG build was DRM-free.
 
 ## Stages
 
@@ -401,6 +423,28 @@ Status is one of: to do, in progress, done, blocked (with the reason).
   speaks "Во вторую руку: <name>". Refusals spoken: heavy one-hand weapon
   without the dual-wield master talent, single-slot item, container open,
   equipment locked. Log line "equip alt <path> -> <result>".
+- Codex, money and pause v1 (agent v35, built 2026-11-20 ~19:30, deployed the same
+  evening, NOT tested; player: "странно и неудобно читать кодекс", "деньги: видим только
+  цифру"; tester log 18:32-18:46). Shared core, so Dragon Age II gets it too.
+  - Codex groups read "<name>, найдено N из M, развёрнуто / свёрнуто[, есть новое]"
+    (kind "group"; before: "1 / 69, флажок, не отмечен"); entries by name (before:
+    the index number "250", the name was only the tooltip) with ", новое";
+    entries not found yet (Locked) are left out (player's choice 2026-11-20).
+  - Codex list rows placed as if not scrolled (agent UnscrolledPos): the list
+    stays after the tabs and Close, rows scrolled above the screen stay listed.
+  - Long texts (300+ characters with line breaks) are listed one paragraph per
+    item ("<path>#2"...); the same text under two field names in one clip is
+    listed once (codex description was spoken twice).
+  - Money alert: "Получено 1 сер. 76 мед." from <Token>.IntegerArg (before:
+    "Получено 1 76"). Items alert: still "Предметы получены"; the mod logs its
+    catalogue entry ("items alert <token>:") to find the item names.
+  - Pause: from Client.Paused (agent PauseLine), the sign's clip only when that
+    cannot be read; ends the "Пауза снята" / "Пауза" flicker.
+  - Test: journal, Оглавление кодекса: names of groups, Enter opens a group and
+    its found entries follow; Enter on an entry reads title then paragraphs,
+    arrows step through paragraphs, Up reaches the tabs and Закрыть. Loot a body
+    with coins: "Получено ... мед.". Pause with Space and wait 10 s: one "Пауза".
+    Pick up an item; Claude then reads the "items alert" lines in the log.
 
 ## Resources
 
@@ -535,11 +579,76 @@ Each decision with its reason, so it is not reopened by accident.
 
 Each fact with how it was proven (file and line, log line, in-game test).
 
-- Store: GOG, game id 1949616134, GOG build 2.1.1.5 (Ultimate Edition). Found by
-  find-game.ps1 on 2026-11-16.
-- Install folder: F:\games\Dragon Age - Origins (exists). Found by find-game.ps1
-  on 2026-11-16. Holds bin_ship, data, modules, packages, Addins, Offers and
-  _origRUS (a backup of Russian settings files: BioWare\Dragon Age\Settings).
+- Store (since 2026-11-20): Steam app 47810, appmanifest_47810.acf in
+  F:\SteamLibrary\steamapps (installdir "Dragon Age Ultimate Edition", buildid
+  21245176). Install folder holds bin_ship, data, modules, packages, Addins, Offers,
+  Bonus, docs, redist. Until 2026-11-19: GOG 1949616134 in F:\games\Dragon Age -
+  Origins (deleted).
+- Steam exe addresses, proven 2026-11-20 without a game run (scratchpad scripts
+  vcheck.py / xrefs.py over the Steam file and its Steamless copy):
+  - .rdata (plain in the Steam file): GFxMovieRoot vtable 0xB4CA6C slots 12 / 18 /
+    30 = 0x954AD0 / 0x956E80 / 0x959590 (GetVariable / Invoke / Advance), as in
+    gfx.cpp.
+  - Decrypted code: 0x70BE80 calls 0x5D58C0, 0x764020, 0x7F6370 and reads
+    0xC327EC; 0x70C9A0 reads 0xC35E77 and calls 0x70BE80; 0x713350 calls 0x70CAD0
+    and 0x712830; 0x5D5BE0 calls 0xA58190; 0x70CAD0 calls 0x838210 and 0x6AB100;
+    0x768AE0 calls 0x7675B0, 0x766040, 0x7661B0, 0x7658E0; byte 0xB59409 is used
+    in the lookup code; every function the mod calls starts right after int3 / ret
+    padding. 17 of 17 checks matched move.cpp / objects.cpp.
+  - Vtable lengths (decrypted copy): GameModeExplore 0xB16374 has 32 function
+    slots, then the UTF-16 string "Target Required"; GameModeCombat 0xB1D89C 32,
+    then floats; GameModePartyPicker 0xB1D31C 30, then "LockedPartyMembers". The
+    mod hooked 39 / 32 / 39 until 2026-11-20 (fixed to 32 / 32 / 30).
+- HKLM\SOFTWARE\BioWare\Dragon Age, value Path (32-bit view) points to the Steam
+  install: the installer's /find found it there 2026-11-20 (was a HYPOTHESIS).
+  The same key also holds Flavour=steam, language=en.
+- Language of the Steam copy (2026-11-20): English only. Steam store API
+  (store.steampowered.com/api/appdetails?appids=47810): English (full audio),
+  Italian, Spanish, German; no Russian. appmanifest_47810.acf language "english";
+  packages\core\data\talktables holds only core_en-us.tlk; only some DLC folders
+  (Addins\dao_prc_cp_1 / _2) carry ru-ru talk tables and voice.
+  Documents\BioWare\Dragon Age\Settings\DragonAge.ini [GameOptions] has
+  Locale=en-us (text) and VOLanguage=en-us (voice), so text and voice are set
+  apart. The GOG copy played in Russian. The Russian text is already on the PC:
+  Documents\BioWare\Dragon Age\packages\core\override\enpy (71 MB, files dated
+  2018-12) holds the ENPY Studio / IMK fan text translation ("Русификатор для
+  Dragon Age: Origins (+ Awakening, + DLC) от 29.01.2019", playground.ru, text only,
+  English voice; its page says for Steam: game language English, then install):
+  packages\core\data\talktables\core_ru-ru.tlk (+ _f), packages\core_ep1 (Awakening),
+  modules\single player talk tables, AddIns\<every DLC> and Offers\<promo> ru-ru
+  talk tables, ru-ru world map textures and intro videos. Since the override folder
+  is loaded whatever the install, Locale=ru-ru alone was tried 2026-11-20: the game
+  wrote Locale=en-us back at its 14:01 start. Why, from the decrypted exe's strings:
+  it checks for packages\core\data\talktables\core_<Locale>.tlk in the install
+  folder ("Could not find a valid file for the Locale language (Talk Tables)
+  setting %s (as specified in DragonAge.ini) in path %s", fallback core_en-us.tlk),
+  and it reads HKLM\SOFTWARE\BioWare\Dragon Age\Language with a table ru, pl, hu,
+  cz, es, it, de, fr, en -> ru-ru ... en-us (Steam's 47810_install.vdf writes "en";
+  its languages are en, es, it, de only). Done 2026-11-20 (player approved): the six
+  ENPY talk tables copied into the install folder (Game folder changes) and
+  Locale=ru-ru set again. Proven 2026-11-20 14:54: that is enough, the registry
+  (still language=en) is not needed; menus and options are Russian, the copyright
+  line ends "© ENPY Studio", Locale=ru-ru stays after the game exits. Other patches found
+  2026-11-20: the 2009 "звук + текст, официальная локализация" archive (no version
+  stated) and a 2025 fix for the EA app edition (says not for Steam).
+  Official source (read 2026-11-20; the site's TLS certificate has expired, read
+  with curl -k): https://enpy.net/projects/localizations/games/dragon_age_origins/
+  ("Статус: Закончен", a support topic and a download page on the site's forum,
+  /forum/index.php?app=downloads&module=downloads&controller=view&id=74, which shows
+  nothing without a login). Terms, https://enpy.net/license/: free, no commercial
+  use; no warranty; no hosting anywhere and no changes to it or any part without
+  the consent of the ENPY.NET editors; only for licensed copies of games. Age does
+  not lift copyright, so the project may not ship these files or a modified copy
+  without ENPY's written permission; copying the player's own installed files on
+  the player's PC, or a link to ENPY's page, is fine.
+- DLC in the Steam copy (game log Documents\BioWare\Dragon Age\Logs\DragonAge_1.log,
+  session 13:12): all 20 add-ins enabled (DAO_PRC_*, PC_GAMER_TALE,
+  DAO_PRC_PROMO_ME, DAO_PRC_NRX_1) without any EA sign-in; online features
+  "Connection failed", harmless.
+- Memory without LAA (Steam, log 13:13-13:22 in camp): used 1965 of 2047 MB
+  address space, largest free block 33 MB, i.e. at the edge where the GOG copy
+  crashed before LAA (2026-11-17). Hence the LAA exe (Game folder changes): from
+  13:43 the address space is 4095 MB with 2046 MB free in one block.
 - 32-bit, native, no CLR: pefile on bin_ship\DAOrigins.exe, Machine 0x14c, COM
   descriptor 0. Sections .text .rdata .data .tls .rsrc .reloc (no SteamStub).
 - Engine Eclipse: 38 "Eclipse" strings in DAOrigins.exe plus the PCGamingWiki
@@ -821,7 +930,7 @@ Each fact with how it was proven (file and line, log line, in-game test).
     (0x70EF10) (tools/handlers.py). 0x713350 takes the target id from global
     0xC06794, looks the object up, gets the cursor action 0x70CAD0(obj) and
     calls this->0x712830(obj, action, 0) (thiscall, ret 0xC).
-  - GameModeExplore vtable 0xB16374 (39 slots), GameModeCombat (derived)
+  - GameModeExplore vtable 0xB16374 (32 slots; 39 before 2026-11-20, see Proven facts, Steam), GameModeCombat (derived)
     0xB1D89C (32 slots); modes live in GameModeController's array. The mod
     captures the instances with per-slot thunks (mov [g], ecx; jmp [orig]).
 - Journal quests (journal.gfx patch003, FFDec QuestList.as / QuestEntry.as,
@@ -971,7 +1080,7 @@ Each fact with how it was proven (file and line, log line, in-game test).
   "GameModeController.UnselectPartyMember N"), CancelButton_mc "Удалить все"
   (ClearPartyPicker), ConfirmButton_mc "Принять" (SubmitPartyChanges), and a
   hover tooltip (PartyPicker.MouseOverName / MouseOverDescription). Candidates
-  are chosen in the 3D scene: GameModePartyPicker (vtable 0xB1D31C, 39 slots)
+  are chosen in the 3D scene: GameModePartyPicker (vtable 0xB1D31C, 30 slots)
   handler SelectPartyMemberUnderCursorMessage 0x768AE0 raycasts (0x7675B0) into
   the entry array at mode +0x8C..+0x90, 0x34 bytes per entry: +0 creature id, +4
   creature object, +8 state (2 free, 1 chosen), +0x10 locked byte, +0x24 slot;
@@ -1026,15 +1135,46 @@ Each fact with how it was proven (file and line, log line, in-game test).
   Down moved to the hidden module list (ModuleListAndDescription_mc). StartMenu
   .HideContents calls MovieUtils.HideMovie, which sets _visible = false,
   hitTestDisable and MovieHidden on the parent clip.
+- Codex (journal.gfx and notifications.gfx of packages\core\patch\patch003.erf,
+  Steam copy, FFDec 2026-11-20, CodexGroup.as / CodexEntry.as /
+  CodexGroupButton.as): rows live in _level0.ScrollingCodexList_mc.Scrollable_mc
+  .CodexGroupN. A CodexGroup has m_sEntryData (<list>.N), m_nCodexGroup,
+  m_bShowingChildren, ShowChildren / HideChildren; its name is <entry>.Name (shown
+  in its Entry clip), its progress text "found / total" counts
+  <entry>.CodexList.K.Locked == 0; <entry>.Updated marks news. Button_mc is a
+  Behaviour.ToggleButton: a push opens (OnButtonAction) or closes
+  (OnSecondaryButtonAction). Children_mc holds CodexEntry sticky buttons (rows of
+  6, WrapSize 300) with m_sEntryData, m_sResRef, UpdateDescription; they show only
+  <entry>.Index as text, the name <entry>.Name is the tooltip; Locked entries are
+  Disable()d. Selecting one fills _root.CodexTitle and
+  _root.CodexDescription_mc.Scrollable_mc (its TextField is also reachable as
+  m_mcTextField: both names were listed, tester log 18:32).
+- Notifications (notifications.gfx Alert.as): each alert is an Alert button with
+  Type (0 custom, 1 quest, 2 codex, 3 items, 4 level up, 5 money, 6 tactics,
+  7 ability, 8 approval, 9 new content, 10 world map, 11 specialization, 12
+  connection lost) and Token (catalogue path). Money: <Token>.IntegerArg in copper,
+  text LOC_RECEIVED / LOC_LOST + ItemUtils.FormatMoneyString, which puts the
+  coins as <img src='ico_gold|ico_silver|ico_copper'> pictures, so the text read
+  is "Получено  1  76". Items: only LOC_ITEMS_RECEIVED, no names in the movie
+  (what the token holds: HYPOTHESIS until the "items alert" log line).
+- Pause sign (floatylayer.gfx FloatyLayer.as): PauseIndicator_mc and
+  PauseBorder_mc follow the catalogue value Client.Paused through a token observer
+  (intro / outro animations; Client.UserPaused picks outro). Reading
+  Client.Paused with GetValue is a HYPOTHESIS until the v35 test.
 
 ## Game folder changes
 
 Added (deleting them returns the game to normal; nothing was replaced):
 
-- F:\games\Dragon Age - Origins\bin_ship\dinput8.dll (Ultimate ASI Loader 9.7.4 x86)
-- F:\games\Dragon Age - Origins\bin_ship\scripts\ (folder) with DAOAccess.asi,
-  DAOAccess.log, and DAOAccess\ (prism.dll, daoaccess.gfx,
-  third-party\prism\mpl-2.0.txt, NOTICE)
+- Steam folder F:\SteamLibrary\steamapps\common\Dragon Age Ultimate Edition,
+  added 2026-11-20 by deploy.ps1 (player approved): bin_ship\dinput8.dll
+  (Ultimate ASI Loader 9.7.4 x86) and bin_ship\scripts\ with DAOAccess.asi and
+  DAOAccess\ (prism.dll, daoaccess.gfx, third-party\prism\mpl-2.0.txt, NOTICE);
+  DAOAccess.log appears at the first start. The mod files and the LAA exe of the
+  old GOG folder went away with that folder.
+- The Documents files below stay from the GOG time and are used by the Steam
+  copy too (same Documents\BioWare\Dragon Age folder; the game ran there
+  2026-11-20 and rewrote DragonAge.ini, addins.xml, offers.xml).
 - %USERPROFILE%\Documents\BioWare\Dragon Age\packages\core\override\daoaccess.gfx
   (our Flash agent; the folder already held the player's own "enpy" folder,
   left untouched)
@@ -1052,13 +1192,41 @@ Added (deleting them returns the game to normal; nothing was replaced):
   STEALING_2 left as they were. Plot conditions untouched. Copies in
   tools\random_encounters_always\. Delete the folder to undo.
 
+- Russian text, added 2026-11-20 (player approved), copies of the ENPY files in
+  Documents\...\override\enpy: ...\Dragon Age Ultimate Edition\packages\core\data\
+  talktables\core_ru-ru.tlk and core_ru-ru_f.tlk, packages\core_ep1\data\talktables\
+  core_ep1_ru-ru.tlk and _f, modules\single player\data\talktables\
+  singleplayer_ru-ru.tlk and _f. Nothing replaced; delete them to undo.
+
 Changed:
 
-- F:\games\Dragon Age - Origins\bin_ship\DAOrigins.exe: Large Address Aware
-  bit set (player approved, 2026-11-17, after crashes). Undo: copy
-  DAOrigins.exe.before-laa back over it.
+- ...\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe replaced 2026-11-20 (player
+  approved, after the camp test showed 1965 of 2047 MB used) by the Steamless copy
+  with LAA: games\dao\tools\make_laa_exe.py on games\dao\work\DAOrigins.unpacked.exe
+  (security directory that pointed past the end cleared, Characteristics 0x102 ->
+  0x122, checksum 0x9cae6d; 8 bytes differ from the Steamless copy), 10 217 312
+  bytes, SHA-256 b74dca7a1b1b69f9242d94afb47b2f67e8c655df89914352cca7d31f76dd8f45,
+  entry 0x4e3024 in .text (so the installer sees it as not wrapped, LAA on). The
+  Steam original is bin_ship\DAOrigins.exe.before-laa (SHA-256 400c2c9e...47bd).
+  Undo: copy it back, or Steam "Verify integrity of game files"; a Steam update
+  also brings the wrapped exe back (the mod still works, only 2 GB again).
+  Proven 2026-11-20 13:43: it starts from the Steam launch option, the mod loads,
+  memory line "used 1973 of 4095 MB address space, largest free 2046 MB".
 
 Changed (settings, not game files):
+
+- %USERPROFILE%\Documents\BioWare\Dragon Age\Settings\DragonAge.ini: Locale=en-us
+  -> Locale=ru-ru (2026-11-20, player approved; VOLanguage=en-us kept), to use the
+  ENPY Russian text in override\enpy. Backup DragonAge.ini.before-ru next to it.
+  Undo: set Locale=en-us again.
+
+- Steam launch options of app 47810 (2026-11-20 13:07, player approved): Steam
+  closed with steam.exe -shutdown, then "LaunchOptions" added to the block
+  UserLocalConfigStore\Software\valve\Steam\apps\47810 of
+  C:\Program Files (x86)\Steam\userdata\<the player's Steam id>\config\localconfig.vdf
+  (value: the bin_ship\DAOrigins.exe path in quotes, then %command%), Steam
+  started again. Backup localconfig.vdf.before-access next to it. Undo: clear the
+  field in Steam, game properties, General, Launch options.
 
 - %USERPROFILE%\Documents\BioWare\Dragon Age\Settings\KeyBindings.ini:
   ZoomIn_1 and ZoomOut_1 (were Keyboard::Button_Next / Button_Prior) set to
@@ -1303,3 +1471,56 @@ One line per in-game test: date, what was tested, result.
 - 2026-11-17 21:28: off-hand equip (Shift+Enter). A heavy weapon gave "heavy"
   (refusal spoken), then "Кинжал" went to slot 1; player confirmed the dagger
   is in the off hand.
+- 2026-11-20 (Claude, no game run): Steam copy checked from files: same build
+  as GOG under SteamStub, all mod addresses found (Proven facts, Steam); vtable
+  slot counts fixed to 32 / 32 / 30. In-game test of the Steam copy pending.
+- 2026-11-20 ~12:55 (player): Steam copy started from Steam: the launcher showed
+  no Play button to OCR, the game never started (no DAOAccess.log). Next: Steam
+  launch options with bin_ship\DAOrigins.exe %command%.
+- 2026-11-20 13:12-13:22 (player): Steam copy with the launch option: started
+  without the launcher, mod loaded (ts=0x4eb19d53 size=0xa49000), scanner in camp,
+  Действие on Morrigan, conversation replies, approval, pause menu, save screen,
+  start menu, all spoken. Game text English (Steam has no Russian). Memory at
+  1965 of 2047 MB. Launch option proven.
+- 2026-11-20 13:43-13:48 (player): Steamless + LAA exe started from Steam, mod
+  loaded, 4095 MB address space, played and saved, no crash. LAA exe proven.
+- 2026-11-20 14:01 (player): Locale=ru-ru only: text stayed English, the game
+  wrote Locale=en-us back (no core_ru-ru.tlk in the install folder). Talk tables
+  copied, Locale=ru-ru set again; test pending.
+- 2026-11-20 14:54 (player): Russian text works (start menu, options tabs and
+  lists in Russian); 4095 MB address space. One English tutorial popup at start
+  ("Shops & Merchants" / "Tutorial Body Text", likely an untranslated DLC
+  string). Russian text proven.
+- 2026-11-20 (a tester on another PC, release 0.2.0, store unknown, via the
+  player): after creating a new character a training tutorial about the camera
+  could not be dismissed, and from then on "nothing could be done". No log yet:
+  asked for that PC's bin_ship\scripts\DAOAccess.log (and DAOAccess.old.log).
+  Origins tutorials known so far: TutorialContainer_mc.Fade_mc.Tutorial_mc with
+  TutorialNextOKButton_mc ("Next" / "Далее"), and text-only training popups read
+  passively since 2026-11-17.
+- 2026-11-20 15:56-15:57 (player): "cannot choose the campaign" on New Game. The
+  log shows the buttons GameButton0_mc / GameButton1_mc ("Dragon Age: Начало",
+  "Dragon Age: Пробуждение") and then the same names again as text items
+  (GameLabel0_mc / GameLabel1_mc); Enter landed on the label text (reread), the
+  buttons were never pressed. Agent v34: a "...Label..." clip beside a visible
+  "...Button..." widget is not listed (A.IsButtonLabel). Deployed, not tested.
+- 2026-11-20 16:01-16:18 (player): new game, city elf, area "Дом" (home in the
+  alienage). Scanner Задания: "цель задания «Праздничный день», Цирион, 8 м" (a
+  plot destination; the player had set Сюжетные подсказки to all areas) and
+  "по заданию «Праздничный день», Сорис, 117 м". Enter on Цирион: talk, the
+  conversation opened. Enter on Сорис (3 times, 117-127 m, outside the house,
+  exit "Эльфинаж" 5 m away): interact result 1, action 3, but the leader never
+  moved. Fix (core scanner.cpp kUseFar): out of a fight, Enter on a target farther
+  than 10 m walks there first (StartWalk) and runs the default action on arrival
+  ("use on arrival" in the log); a stop short or an area change drops it.
+  Proven 16:25-18:08 (next line).
+- 2026-11-20 16:24-18:10 (player, Steam, agent v34): walk then use proven: "use on
+  arrival" for the exit Эльфинаж, Сорис and Дункан (talk), Валендриан, barrels and
+  racks (loot). Problems: codex groups read "N / M, флажок", found entries by
+  number only; money alert "Получено 6" (coins are pictures); "Предметы получены"
+  without names. Fixed in agent v35 (Stages, Codex, money and pause v1).
+- 2026-11-20 13:22-18:46 (tester, GOG build, release 0.2.0 agent v30; log in
+  testers logs\, not in git): the same codex problems, plus: after opening a group
+  the list jumped before the tabs and Up stuck on its first row (20 presses), the
+  codex text was spoken twice and could only be heard again from the start, and
+  "Пауза снята" / "Пауза" every 1-4 s while paused. Fixed in agent v35.

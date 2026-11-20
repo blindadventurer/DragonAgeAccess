@@ -8,31 +8,48 @@
 
 ## Game
 
-- Name: Dragon Age II, patch 1.04 with 16 DLC
-- Store and install folder: not a Steam, Epic or GOG copy (installed 2026-11-18,
-  not found by find-game.ps1), F:\games\Dragon Age 2.v 1.04 + 16 DLC
-- Main executable: F:\games\Dragon Age 2.v 1.04 + 16 DLC\bin_ship\DragonAge2.exe
-  (12 181 504 bytes). DragonAge2Launcher.exe at the root is the launcher;
-  bin_ship\DragonAge2Config.exe is the settings tool. One exe for DX9 and DX11
-  (DragonAge.ini UseDirectX11Renderer=1; the game log says DX11 initialised).
-- Build proven on: DragonAge2.exe FileVersion 1.04.8524.0, PE TimeDateStamp
+- Name: Dragon Age II: Ultimate Edition (patch 1.04 with the DLC)
+- Store and install folder (since 2026-11-20): Steam app 1238040 (build id
+  10351532), F:\SteamLibrary\steamapps\common\Dragon Age II. It runs through the
+  EA app (EAStore.ini StoreName=Steam, __Installer, bin_ship\Core\Activation.dll).
+  The earlier copy in F:\games is deleted.
+- Main executable: ...\Dragon Age II\bin_ship\DragonAge2.exe (12 172 664 bytes,
+  SHA-256 478357e492859402618e2225df25d6d78a8105ea6f30f548c19602483474ed0a).
+  bin_ship\DragonAge2Config.exe is the settings tool; no launcher exe at the root.
+  One exe for DX9 and DX11 (DragonAge.ini UseDirectX11Renderer=1).
+- Steam build: PE stamp 0x4f1e9fb5 (same as the earlier copy), SizeOfImage
+  0xbd2000, no LAA (Characteristics 0x102), signed. In kProvenBuilds since
+  release v0.3.0. EA's DRM wrapper: a last,
+  unnamed section at RVA 0xBD0000 holds the entry point 0xBD0830 and an import
+  table of SHLWAPI / KERNEL32 / USER32 only; .text is encrypted on disk (entropy
+  8.0), .rdata / .data are plain. The game's own imports (DINPUT8 among them)
+  are resolved by the wrapper after decryption, so dinput8.dll is loaded from
+  bin_ship later than in the earlier copy. With UAL's default
+  (DontLoadFromDllMain=1, plugins load from hooked kernel32 calls of the exe) the
+  mod never started (test 12:56: game ran, no DA2Access.log). Fix, proven
+  2026-11-20 13:03: games\da2\loader\global.ini, copied to
+  bin_ship\scripts\global.ini by deploy.ps1, make_release.ps1 and so the
+  installer: [GlobalSets] LoadPlugins=1, LoadFromScriptsOnly=1,
+  DontLoadFromDllMain=0 (key names are strings in UAL 9.7.4's dinput8.dll). Log:
+  "loader: dinput8.dll=...\bin_ship\DINPUT8.dll (9.7.4.0)", vtable hooks on,
+  start phrase Success, menus read.
+- Memory without LAA (Steam, log 13:03 at the title screen): used 883 of 2047 MB
+  address space, largest free block 416 MB. Watch in long sessions.
+- Earlier build proven on: DragonAge2.exe FileVersion 1.04.8524.0, PE stamp
   0x4f1e9fb5, SizeOfImage 0xbd5000, SHA-256
-  253617d98b68457f3c249431da4e888f020210f888f001319881731c1e4bb506.
-- 32 or 64 bit: 32-bit (PE Machine 0x14c). Since 2026-11-19 the exe carries the
-  Large Address Aware flag (Characteristics 0x102 -> 0x122, checksum updated to
-  0xbaa609, same stamp; new SHA-256
-  bcffcef9d4d9460a7cf64618f190dd78b900f7130b474f6dccee41b8b42669be; 3 bytes
-  differ). The original is bin_ship\DragonAge2.exe.before-laa (hash above).
-  Done with tools\set_laa.py.
+  253617d98b68457f3c249431da4e888f020210f888f001319881731c1e4bb506 (imports in an
+  extra section ".theta"), with the LAA flag set from 2026-11-19.
+- 32 or 64 bit: 32-bit (PE Machine 0x14c).
 - Engine family (one of: unity-mono, unity-il2cpp, unreal, godot, gamemaker,
   rpgmaker-web-vn, dotnet-custom, native-custom, script-extender-engines,
   emulation, scripted, other): native-custom
 - Engine and version: family native-custom, BioWare Eclipse engine (DA2 branch)
   1.04.8524.0. UI is Scaleform GFx 3.x with ActionScript 2 movies (SWF 8). Audio
   is Wwise (AK exports), not FMOD as in Origins. Middleware: PhysX, Umbra, Bink.
-- Anti-cheat or DRM: no anti-cheat files. The exe's import table sits in an
-  extra section ".theta". It also carries ".stab/.stabstr" debug sections from TransGaming's
-  libcross (the Mac port wrapper); harmless. The game tries EA online features
+- Anti-cheat or DRM: no anti-cheat files. EA's DRM wrapper on the Steam exe (see
+  above); the exe is not changed (no LAA), since changing a wrapped exe may stop
+  it from starting. The exe carries ".stab/.stabstr" debug sections from
+  TransGaming's libcross (the Mac port wrapper); harmless. The game tries EA online features
   (BLAZE login prompt) at start; single-player works without it.
 
 ## Stages
@@ -89,6 +106,12 @@ Status is one of: to do, in progress, done, blocked (with the reason).
   Noise filter (build 00:27, not tested): start-menu advert ticker
   (NewContentText), build version (tf_BuildVersion) and unlocalised "?(...)"
   texts are dropped from the item list.
+  Shared agent v35 (built 2026-11-20 for the Origins codex, deployed the same evening, NOT tested here): long
+  texts with line breaks are read one paragraph per item, a text under two field
+  names in one clip is listed once, the pause sign is read from Client.Paused when
+  the game answers it (else the old PauseIndicator_mc scan; whether this movie
+  has that value is unknown), money alerts of an Alert with Type 5 in coins. Check
+  in the next Dragon Age II test: a long text (privacy policy, codex), the pause.
 - Scanner (scanner): in progress. Origins scanner.cpp ported unchanged except: runs
   in the CombinedHUD movie (DA2 has no Minimap movie), KeyBindings path "Dragon
   Age 2", position offset found at run time (CalibratePos on the player, log
@@ -191,9 +214,67 @@ Each decision with its reason, so it is not reopened by accident.
 
 Each fact with how it was proven (file and line, log line, in-game test).
 
-- Install folder found by directory listing 2026-11-18 (no store: find-game.ps1
-  lists only the Origins GOG copy).
-- Exe identity: pefile on bin_ship\DragonAge2.exe (Machine 0x14c, no CLR header,
+- Steam copy (2026-11-20): appmanifest_1238040.acf in F:\SteamLibrary\steamapps
+  (installdir "Dragon Age II"); the installer's /find finds it through the Steam
+  libraries.
+- Steam exe addresses, proven 2026-11-20 from the file's plain .rdata / .data
+  (the code is encrypted, so no call check as in Origins): GFx movie vtable
+  0xC2E514 slots 22 / 28 / 43 = 0x97B2F0 / 0x986550 / 0x988AB0 as in gfx.cpp;
+  GameModeExplore 0xBE13FC and GameModeCombat 0xBEEE44 hold code pointers in the
+  same pattern; 0xD54494 and 0xD4FA0E lie in .data. Same PE stamp and section
+  layout up to .reloc as the earlier copy. The in-game test is the proof for the
+  code addresses (move.cpp, objects.cpp).
+- Vtable lengths (Steam .rdata, 2026-11-20): GameModeExplore 0xBE13FC 36 function
+  slots, GameModeCombat 0xBEEE44 36, then the UTF-16 string "InCombatMode". The mod
+  hooked 42 combat slots until 2026-11-20 (fixed to 36).
+- DLC in the Steam copy need the EA sign-in (2026-11-20, game log
+  Documents\BioWare\Dragon Age 2\Logs\DragonAge_1.log, session 13:03): all 18
+  add-ins "Disabled AddIn" (DA2_PRC_DRK, DA2_PRO_FUT01..11, DA2_PRO_COL,
+  DA2_PRC_SEB, DA2_PRC_ONE, DA2_MTX_*, DA2_PRC_EYE); the in-game DLC list
+  (PRCContentManager) marks each "(Неавторизованный)"; the game connects to BLAZE
+  and fetches its config, then waits for a login. A save made with DLC says it
+  cannot load without them. Proven 2026-11-20 14:52: signing in with the
+  player's EA account in the game (and accepting the policy and user agreement)
+  enables all 18; a first try may fail with createPersona cf0001, a second works.
+- Level-up (2026-11-20, FFDec exports characterrecord / abilities in games\da2\work\as):
+  Character Record (pause menu "УРОВЕНЬ ПОВЫШЕН" / CharacterRecord_mc) reads
+  Характеристики, Способности, Тактика, Устойчивость, portraits "можно повысить
+  уровень", "Авто. уровень" (AutoLevelButton_mc -> GUICharGen.AutoLevelUp), Назад
+  (log 14:53). Attributes: rows AttributesEntry (m_sEntryName, m_nAttributeData,
+  m_sMatchingStatName/Data) with StatPlus_mc / StatMinus_mc shown only under the
+  mouse, calling CharacterRecord.ChangeAttribute(ListItemIndex - 1, +1 / -1)
+  (GUI.SelectedChar.BuyAttribute); a minus only for points added this time
+  (AttributeHasPointsSpent); points left CreatureUtils.GetCharacterAttributePoints();
+  ConfirmButton_mc (string 374937) shows only when every point is spent
+  (IsAttributeConfirmEnabled) and calls ConfirmAttributeSpending; leaving refunds
+  unconfirmed points. Agent v33: such a row is a "spin" ("Сила, 15, Урон 12,
+  свободных очков 2"), Left / Right add / take back ("Нет свободных очков",
+  "Сюда в этот раз очки не добавлялись"). Abilities (abilities.gfx): icons
+  BookAbilityIcon with m_oAbility (nDisplayState 1 have, 2 available,
+  3 unlockable), OnButtonAction learns / unlearns (Abilities.Learn ->
+  GUI.SelectedChar.BuyAbility), Confirm_mc (ConfirmSpentAbilities) appears after a
+  purchase; the agent already reads these icons as "ability" (Origins code) and
+  presses them with SimulateButtonPush. Built and deployed, NOT tested.
+- EA sign-in screen (mod log 13:04): start menu "ВОЙДИТЕ В СЕТЬ"
+  (StartMenuButtons_mc.SignInButton) opens movie "login", title "УПРАВЛЕНИЕ
+  УЧЕТНОЙ ЗАПИСЬЮ", e-mail box _level0.AccountNameInput_mc.TextField, password box
+  _level0.PasswordInput_mc.TextField, "Забыли пароль" (Forgotpw_Link), "Войти"
+  (Login_mc). Enter anywhere on it sends the form (an Enter that only started
+  typing in the e-mail box gave "wrong user name or password" at once). The game
+  focuses the e-mail box when the screen opens.
+- After a sign-in with a correct password comes LoginViewTOS (FFDec export of
+  patch\loginviewtos.gfx to games\da2\work\as\loginviewtos, class LoginViewTOS):
+  two stages in one movie, privacy policy (GUILogin.PPText) then terms of service
+  (GUILogin.TOSText), each in ViewText_mc.Scrollable_mc; buttons Accept_mc
+  (AcceptAction: stage 1 -> stage 2, stage 2 -> GUILogin.AcceptTOS) and Cancel_mc
+  (a confirm dialog, then GUILogin.CancelTOS). Leaving it any other way sends
+  CancelTOS (FinishScene).
+- Language (2026-11-20): DragonAge.ini [GameOptions] Locale=ru-ru (text),
+  VOLanguage=en-us (voice); HKLM\SOFTWARE\WOW6432Node\BioWare\Dragon Age 2
+  language=ru; appmanifest_1238040.acf language "russian". Voice folders exist
+  only for en-us, de-de, fr-fr; the Steam store API lists Russian as text only
+  (full audio: English, French, German).
+- Exe identity of the earlier copy: pefile on bin_ship\DragonAge2.exe (Machine 0x14c, no CLR header,
   version resource 1.04.8524.0, sections .text .rdata .data .tls .stab .stabstr
   .rsrc .reloc .theta). Imports by name include dinput8.dll, d3d9.dll,
   binkw32.dll, winmm.dll, version.dll, xinput1_3.dll.
@@ -315,7 +396,7 @@ Each fact with how it was proven (file and line, log line, in-game test).
   - Other handlers: PreMoveCharacterToLocation 0x42BEF0, PerformUseObject
     0x480440, SelectNextCreatureTarget 0x46AC90, CenterOnObject 0x42C320.
   - GameModeExplore vtable 0xBE13FC (36 slots, offset 0), GameModeCombat
-    0xBEEE44 (42 slots, offset 0).
+    0xBEEE44 (36 slots, offset 0; 42 before 2026-11-20 overwrote "InCombatMode").
   - Catalogue attribute ids (_PROPERTIES.as in partypicker.gfx): health 7 (as
     Origins), mana / stamina 10 (Origins 8), level 36 (Origins 15).
   - HYPOTHESIS: object names / tags as VC++ wstrings in the object head (first
@@ -354,20 +435,17 @@ Each fact with how it was proven (file and line, log line, in-game test).
 
 ## Game folder changes
 
-Added 2026-11-19 by deploy.ps1 (deleting them returns the game to normal; nothing
-was replaced):
-
-- F:\games\Dragon Age 2.v 1.04 + 16 DLC\bin_ship\dinput8.dll (Ultimate ASI
-  Loader 9.7.4 x86)
-- ...\bin_ship\scripts\ (folder): DA2Access.asi, DA2Access.log, DA2Access\
-  (prism.dll, da2access.gfx, third-party\prism\mpl-2.0.txt, NOTICE)
-- %USERPROFILE%\Documents\BioWare\Dragon Age 2\packages\core\override\da2access.gfx
-
-Changed:
-
-- F:\games\Dragon Age 2.v 1.04 + 16 DLC\bin_ship\DragonAge2.exe: Large Address
-  Aware flag set (player approved, 2026-11-19). Undo: copy
-  DragonAge2.exe.before-laa back over it.
+- Steam folder F:\SteamLibrary\steamapps\common\Dragon Age II, added 2026-11-20
+  by deploy.ps1 (player approved): bin_ship\dinput8.dll (Ultimate ASI Loader
+  9.7.4 x86) and bin_ship\scripts\ with DA2Access.asi and DA2Access\ (prism.dll,
+  da2access.gfx, third-party\prism\mpl-2.0.txt, NOTICE); DA2Access.log appears at
+  the first start; bin_ship\scripts\global.ini (loader settings, 2026-11-20 12:59).
+  The mod files and the LAA exe of the earlier copy went away with its folder.
+- Left from the earlier copy and used by the Steam one too (same Documents folder;
+  the game ran there 2026-11-20): %USERPROFILE%\Documents\BioWare\Dragon Age
+  2\packages\core\override\da2access.gfx (an old agent, replaced by the next
+  install) and Settings\KeyBindings.ini with the zoom keys freed (backup
+  KeyBindings.ini.before-access).
 
 ## Pitfalls
 
@@ -432,3 +510,58 @@ One line per in-game test: date, what was tested, result.
   difficulty picker arrows, party portraits (fixed in agent v29, not tested).
 - 2026-11-19 00:28 (Claude, build 00:27): LAA proven (4095 MB). Test of the click
   pick interrupted: the player was pressing keys at the same time; Claude stopped.
+- 2026-11-20 (Claude, no game run): Steam copy checked from files: same PE stamp
+  under EA's DRM wrapper, the GFx vtable slots match gfx.cpp; combat vtable slot
+  count fixed to 36. In-game test of the Steam copy pending.
+- 2026-11-20 12:56 (player): first start of the Steam copy with the mod: game ran,
+  mod silent, no DA2Access.log. Loader settings global.ini added for the next test.
+- 2026-11-20 13:03 (player): Steam copy with global.ini: mod loaded (start phrase,
+  ts=0x4f1e9fb5 size=0xbd2000), menus read: PreStartMenu, DLC list
+  (PRCContentManager, 28 items, details text), start menu, quit dialog. Not yet
+  checked: scanner, walking, combat (needs a save in play).
+- 2026-11-20 13:04-13:05 (player): EA sign-in screen (movie "login"): read, but
+  typing went wrong: Enter to start typing also sent the empty form ("wrong user
+  name or password"); the e-mail box kept the game focus, so the password went
+  into it and into the log (masked since). Fixed in the shared core (typing follows
+  the cursor, password fields, nothing typed is logged); new build deployed, test
+  pending. A save from the earlier copy would not load: its DLC is not installed.
+- 2026-11-20 13:48-13:50 (player): EA sign-in with the new typing: e-mail and
+  password typed (log shows only lengths, password said as stars), Далее sent the
+  form. Then the privacy policy screen (movie LoginViewTOS) froze the game for
+  45 s ("worst call 44969 ms in LoginViewTOS": the agent's Clean built its
+  long text one character at a time), the game dropped back to the start menu
+  and the policy could not be accepted. Fixed in agent v32 (Clean with
+  split/join, texts over 3000 characters cut); deployed, test pending.
+- 2026-11-20 13:57-13:58 (player): the game would not start. EA log
+  (%LOCALAPPDATA%\Electronic Arts\EA Desktop\Logs\EASteamLauncher.log): the game
+  process was created suspended, no ResumeGameRequest came from EADesktop (in the
+  good launches it comes within 10 ms), ProxiedLaunchTimeout after 15 s, error
+  "Непредвиденная ошибка" not shown (EA app window hidden). Steam then refused new
+  starts (WaitingPrevProcess, AppError_16) since EASteamLauncher stayed alive.
+  EADesktop had run since 13:48, i.e. through the 45 s freeze and the sign-in.
+  Claude stopped EASteamLauncher, EASteamAuthHelper, EADesktop, EALocalHostSvc
+  at about 14:10; not the mod (the game never reached dinput8.dll). Retry pending.
+- 2026-11-20 14:50-14:54 (player): the game started again after the EA processes
+  were stopped. Sign-in: LoginViewTOS read (header, intro, the policy text cut,
+  Принять / Отмена), Принять twice (policy, then user agreement). Game log: BLAZE
+  acceptTos, createPersona failed (onCreatePersonaError cf0001, "Не удалось
+  соединиться с сервером Dragon Age"); a second sign-in at 14:52 went through
+  (loginPersona, OnSignedIn, entitlements) and all 18 add-ins switched to
+  Enabled; the DLC list lost its "*" / "(Неавторизованный)" marks, the start menu
+  grew to 10 items, and the old save loaded (Lothering intro, character record).
+  Seen in passing: the loading text spoken three times; "Травмы. Гаррет: травма
+  200000" (a raw number). EA sign-in and DLC proven.
+- 2026-11-20 15:33-15:35 (player): level-up. Attributes proven: rows read
+  "Ловкость, 10, Вероятн. критич. удара 0%, свободных очков 3, 3 из 6", Right added
+  points (Ловкость, Сила, Хитрость), "Подтвердить" (ConfirmButton_mc) appeared at 0
+  and confirmed; the game then opened the abilities screen itself. Abilities not yet
+  usable: the 7 trees (AbilityClassContainer) read "без подписи", and after Enter on
+  one the screen listed no ability icons (the tree, a widget, hid them). Fixed in
+  agent v33 build 15:5x: a tree is a button named m_sClassName while
+  AlmightyContainer.InChainSelection() is true, otherwise the agent walks into it.
+  A training tutorial (TrainingTutorialTopRight_mc, "Закрыть", text on ability icon
+  shapes) took the keys until closed; a tester's stuck camera tutorial turned out to be
+  in Origins (games\dao\NOTEBOOK.md), not here. Fix (menu.cpp TutorialOnly): a PopupLayer whose only
+  widgets lie under TrainingTutorial* is read passively and never takes the keys
+  (Origins tutorials sit under TutorialContainer_mc and are not affected). Both
+  built and deployed, NOT tested.

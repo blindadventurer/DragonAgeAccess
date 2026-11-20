@@ -155,6 +155,12 @@ int g_walkRetries = 0;       // orders repeated after a stop (test 22:22: 235 m 
 constexpr int kWalkRetries = 2;
 constexpr double kNear = 5.0;  // a stop this close counts as arrived (people and
                                // objects cannot be stood on: 3.2 m, 4.1 m in test 22:23)
+// Enter on a target farther than this (out of a fight): walk there first, then the
+// game's default action on arrival. The default action alone accepted "talk" on Сорис
+// 117 m away (result 1) but the leader never moved (Origins city elf home, test
+// 2026-11-20 16:18); 8 m away (Цирион) it worked.
+constexpr double kUseFar = 10.0;
+unsigned g_useOnArrive = 0;    // object id to act on when the walk arrives
 
 bool Pressed(KeyState& ks, int vk) {
     bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
@@ -870,6 +876,7 @@ void StartWalk(const Player& p, const Entry& e, DWORD now) {
         return;
     }
     Speak(L"Иду: " + e.name + L", " + DistText(Dist(p, e)), true);
+    g_useOnArrive = 0;  // set again by the caller when Enter walks first
     g_walking = true;
     g_target = e;
     g_lastX = p.x;
@@ -946,6 +953,7 @@ void WatchWalk(void* movie, DWORD now) {
     GfxCall(movie, "DAOAccess.Val", {"Area.Name"}, &area);
     if (!area.empty() && area != g_walkArea) {
         g_walking = false;
+        g_useOnArrive = 0;
         LogLine(L"walk ended by area change to \"" + area + L"\"");
         return;
     }
@@ -972,16 +980,28 @@ void WatchWalk(void* movie, DWORD now) {
         g_lastY = p.y;
         g_lastMoveAt = now;
     }
+    // Arrived after Enter on a far target: the default action now (talk, open...).
+    auto useNow = [&]() {
+        unsigned id = g_useOnArrive;
+        g_useOnArrive = 0;
+        if (!id) return false;
+        int action = InteractWith(id, false);
+        LogLine(L"use on arrival " + g_target.Key() + L" \"" + g_target.name + L"\" -> action " + std::to_wstring(action));
+        if (action <= 0) return false;
+        Speak(L"Действие: " + g_target.name, true);
+        return true;
+    };
     if (d <= kArrive) {
         g_walking = false;
         LogLine(L"walk arrived " + g_target.Key() + L" " + std::to_wstring(d));
-        Speak(L"Пришли: " + g_target.name, true);
+        if (!useNow()) Speak(L"Пришли: " + g_target.name, true);
     } else if ((int)(now - g_lastMoveAt) >= (int)kStuckMs) {
         std::wstring dir = Direction(p, g_target);
         if (d <= kNear) {
             g_walking = false;
             LogLine(L"walk arrived near " + g_target.Key() + L" " + std::to_wstring(d));
-            Speak(L"Пришли: " + g_target.name + L", " + DistText(d) + (dir.empty() ? L"" : L", " + dir), true);
+            if (!useNow())
+                Speak(L"Пришли: " + g_target.name + L", " + DistText(d) + (dir.empty() ? L"" : L", " + dir), true);
         } else if (g_walkRetries < kWalkRetries && g_walkerId &&
                    MoveCreatureTo(g_walkerId, g_target.x, g_target.y, p.x, p.y)) {
             ++g_walkRetries;
@@ -990,6 +1010,7 @@ void WatchWalk(void* movie, DWORD now) {
                     std::to_wstring(g_walkRetries) + L")");
         } else {
             g_walking = false;
+            g_useOnArrive = 0;
             LogLine(L"walk stopped short of " + g_target.Key() + L" " + std::to_wstring(d));
             Speak(L"Остановился. " + g_target.name + L", " + DistText(d) + (dir.empty() ? L"" : L", " + dir), true);
         }
@@ -1924,9 +1945,17 @@ void ScannerTick(void* movie, DWORD now, bool menuOpen) {
         std::wstring inCombat;
         GfxCall(movie, "DAOAccess.Val", {"GUI.SelectedChar.InCombat"}, &inCombat);
         if (inCombat.empty()) GfxCall(movie, "DAOAccess.Val", {"Party.Leader.InCombat"}, &inCombat);
+        bool fighting = inCombat == L"1" || g_cb.in;
+        // Far away and not fighting: walk there, act on arrival (kUseFar).
+        if (!fighting && Dist(p, e) > kUseFar) {
+            LogLine(L"use " + e.Key() + L" \"" + e.name + L"\" far (" + DistText(Dist(p, e)) + L"): walk first");
+            StartWalk(p, e, now);
+            if (g_walking) g_useOnArrive = id;
+            return;
+        }
         // In a fight the combat mode gives the order (DA2: the catalogue has no
         // InCombat field, so every attack of test 19:55 went through explore mode).
-        int action = InteractWith(id, inCombat == L"1" || g_cb.in);
+        int action = InteractWith(id, fighting);
         LogLine(L"use " + e.Key() + L" \"" + e.name + L"\" -> action " + std::to_wstring(action));
         // An ability waiting for its target (test 19:23: Enter on the enemy after
         // key 2 used Удар щитом, its cooldown started).

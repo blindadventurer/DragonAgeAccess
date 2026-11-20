@@ -496,7 +496,13 @@ void Scan(void* movie, MovieState& st, DWORD now) {
     // 2026-11-18.
     bool ok;
     if (st.file == L"FloatyLayer") {
-        ok = GfxCall(movie, "DAOAccess.ScanUnder", {"_level0.PauseIndicator_mc"}, &txt);
+        // The game's pause state first (agent PauseLine); the sign's clip only when
+        // that state cannot be read.
+        ok = GfxCall(movie, "DAOAccess.PauseLine", {}, &txt);
+        if (!ok || txt == L"?") {
+            txt.clear();
+            ok = GfxCall(movie, "DAOAccess.ScanUnder", {"_level0.PauseIndicator_mc"}, &txt);
+        }
     } else if (IsHud(st.file) && st.file != L"Notifications") {
         st.items.clear();
         return;
@@ -596,6 +602,7 @@ std::wstring Describe(const MovieState& st, size_t idx) {
     const Item& it = st.items[idx];
     std::wstring s = it.label.empty() ? L"без подписи" : it.label;
     if (it.kind == L"toggle") s += it.value == L"1" ? L", флажок, отмечен" : L", флажок, не отмечен";
+    else if (it.kind == L"group") s += L", " + it.value;  // codex group: found, open or closed
     else if (it.kind == L"tab") s += it.value == L"1" ? L", вкладка, выбрана" : L", вкладка";
     else if (it.kind == L"radio") s += it.value == L"1" ? L", выбрано" : L"";
     else if (it.kind == L"slider") s += L", ползунок, " + it.value;
@@ -629,6 +636,8 @@ std::wstring Describe(const MovieState& st, size_t idx) {
         s += L", " + std::to_wstring(pos) + L" из " + std::to_wstring(n);
     }
     else if (it.kind == L"edit") s = L"поле ввода, " + (it.label.empty() ? std::wstring(L"пусто") : it.label);
+    else if (it.kind == L"password")
+        s = L"поле пароля, " + (it.value.empty() || it.value == L"0" ? std::wstring(L"пусто") : it.value + L" симв.");
     else if (it.kind == L"text") {
         s = it.label;
         // A bare number ("3") gets the text before it ("Характеристики, 3"):
@@ -660,11 +669,15 @@ void SpeakItem(const MovieState& st, size_t idx, const wchar_t* why, bool interr
     g_curPath = it.path;
     g_curSpoken = Describe(st, idx);
     std::wstring say = g_curSpoken + PositionSuffix(st, idx);
+    // What is in an input field (an e-mail address typed for the EA sign-in) is
+    // spoken but never logged; a password field says only its length.
+    bool secret = it.kind == L"edit" && !it.label.empty();
     LogLine(std::wstring(L"item ") + why + L" " + std::to_wstring(idx + 1) + L"/" +
-            std::to_wstring(st.items.size()) + L" " + st.file + L" " + it.kind + L" \"" +
-            say + L"\" y=" + std::to_wstring(it.y) + L" x=" + std::to_wstring(it.x) +
-            L" path=" + it.path);
-    Speak(say, interrupt);
+            std::to_wstring(st.items.size()) + L" " + st.file + L" " + it.kind + L" " +
+            (secret ? std::wstring(L"<скрыто>") : L"\"" + say + L"\"") + L" y=" + std::to_wstring(it.y) +
+            L" x=" + std::to_wstring(it.x) + L" path=" + it.path);
+    if (secret) SpeakPrivate(say, interrupt);
+    else Speak(say, interrupt);
 }
 
 bool IsWidget(const Item& it) { return it.kind != L"text"; }
@@ -712,11 +725,26 @@ bool HasWidget(const MovieState& st) {
     return false;
 }
 
-void AnnouncePassive(MovieState& st) {
+// Dragon Age II training tutorials (popuplayer.gfx TrainingTutorial*_mc, shown by
+// PopupLayer.DisplayTutorial): the game runs on under them and their only widget
+// is a "Закрыть" that just hides them. As an active screen they took the mod's keys
+// (scanner, walking) for as long as they stayed up; a tutorial that waits for an
+// action (the camera one) can come back, and a tester was stuck (2026-11-20).
+bool TutorialOnly(const MovieState& st) {
+    bool any = false;
+    for (const Item& it : st.items) {
+        if (!IsWidget(it)) continue;
+        if (it.path.find(L"TrainingTutorial") == std::wstring::npos) return false;
+        any = true;
+    }
+    return any;
+}
+
+void AnnouncePassive(void* movie, MovieState& st) {
     bool notif = st.file == L"Notifications", floaty = st.file == L"FloatyLayer";
     // A popup with text only (training tutorials that wait for an action, test
     // 2026-11-17 03:36) is read once and leaves the keys to the screen below.
-    bool textPopup = st.file == L"PopupLayer" && !HasWidget(st);
+    bool textPopup = st.file == L"PopupLayer" && (!HasWidget(st) || TutorialOnly(st));
     if (!notif && !floaty && !textPopup) {
         st.passive.clear();
         return;
@@ -724,11 +752,23 @@ void AnnouncePassive(MovieState& st) {
     std::unordered_set<std::wstring> now;
     for (const Item& it : st.items) {
         if (floaty && it.path.find(L"PauseIndicator") == std::wstring::npos) continue;
+        if (textPopup && IsWidget(it)) continue;  // a tutorial's "Закрыть"
         std::wstring key = textPopup ? it.path + L"|" + it.label : it.path;  // a changed text is new
         now.insert(key);
         if (st.passive.count(key) || it.label.empty()) continue;
         LogLine(L"passive " + st.file + L" \"" + it.label + L"\"");
         Speak(it.label, false);
+        // An items alert (agent value "3|<token>") says only "Предметы получены".
+        // Research: log what its catalogue entry holds, to find the item names.
+        if (notif && it.value.compare(0, 2, L"3|") == 0) {
+            std::wstring tree;
+            std::string token = Utf8(it.value.substr(2));
+            if (GfxCall(movie, "DAOAccess.Explore", {token.c_str(), 2.0, 60.0}, &tree)) {
+                std::vector<std::wstring> lines{L"items alert " + it.value.substr(2) + L":"};
+                for (auto& l : Split(tree, L'\n')) if (!l.empty()) lines.push_back(L"  " + l);
+                LogLines(lines);
+            }
+        }
     }
     if (floaty && !st.passive.empty() && now.empty()) {
         LogLine(L"passive FloatyLayer pause off");
@@ -744,7 +784,7 @@ void* PickActive(DWORD now) {
         if (s.agent != AGENT_READY || !s.identified || s.items.empty() || now - s.lastSeen > 1000) continue;
         if (IsHud(s.file)) continue;
         if (s.file == L"PopupLayer") {
-            if (HasWidget(s)) return m;
+            if (HasWidget(s) && !TutorialOnly(s)) return m;
             continue;  // text-only popup: announced passively (AnnouncePassive)
         }
         if (!best || s.seq > bestSeq) { best = m; bestSeq = s.seq; }
@@ -904,8 +944,42 @@ std::unordered_map<std::wstring, std::wstring> g_sectionMemory;  // section -> l
 // changes are read after it (watch).
 std::wstring g_hoverPath;
 
+// Typing into an input field. The game's keyboard focus follows the mod's cursor:
+// arriving on an "edit" or "password" item focuses it (caret at the end), so what
+// the player types goes where the cursor is; leaving it takes the focus away. Before
+// 2026-11-20 typing started only with Enter, but the Dragon Age II EA sign-in sends
+// the form on any Enter, and its e-mail box kept the focus while the mod's cursor
+// moved on, so a password went into the e-mail box (test 13:05).
+std::wstring g_editPath, g_editText;  // the field being typed into, its text so far
+bool g_editSecret = false;            // a password field: never spoken or logged
+bool g_fieldFocused = false;          // the game's focus is in a field the mod put it in
+std::wstring g_editDonePath;          // finished with Enter: not refocused until the cursor leaves
+
+bool IsField(const Item& it) { return it.kind == L"edit" || it.kind == L"password"; }
+
+void StopTyping(void* movie) {
+    if (g_fieldFocused) GfxCall(movie, "DAOAccess.Unfocus", {});
+    g_fieldFocused = false;
+    g_editPath.clear();
+}
+
+bool StartTyping(void* movie, const Item& it, const char* mode) {
+    std::wstring r;
+    GfxCall(movie, "DAOAccess.Focus", {Utf8(it.path), std::string(mode)}, &r);
+    LogLine(L"edit start " + it.path + L" " + Widen(mode) + L" -> " + r);
+    if (r != L"ok") return false;
+    g_fieldFocused = true;
+    g_editPath = it.path;
+    g_editSecret = it.kind == L"password";
+    g_editText.clear();
+    GfxGet(movie, (Utf8(it.path) + ".text").c_str(), g_editText);
+    return true;
+}
+
 void MoveTo(void* movie, const MovieState& st, size_t idx, const wchar_t* why, bool interrupt = true) {
     const Item& it = st.items[idx];
+    if (it.path != g_editDonePath) g_editDonePath.clear();
+    if (g_fieldFocused && it.path != g_editPath) StopTyping(movie);
     if (it.path != g_hoverPath) {
         if (!g_hoverPath.empty()) GfxCall(movie, "DAOAccess.Hover", {Utf8(g_hoverPath), 0.0});
         g_hoverPath.clear();
@@ -917,6 +991,7 @@ void MoveTo(void* movie, const MovieState& st, size_t idx, const wchar_t* why, b
     }
     if (SectionMode(st.file)) g_sectionMemory[SectionOf(st, it)] = it.path;
     SpeakItem(st, idx, why, interrupt);
+    if (IsField(it) && it.path != g_editPath && it.path != g_editDonePath) StartTyping(movie, it, "end");
 }
 
 // Left/Right or PageUp/PageDown on a list screen: the next section, on the item
@@ -1101,45 +1176,62 @@ void AnnounceScreen(void* movie, const MovieState& st, const wchar_t* why) {
     }
 }
 
-// Text input in progress (Enter on an "edit" item): keys go to the game's field.
-std::wstring g_editPath, g_editText;
 unsigned g_lastSerial = 0;
 std::unordered_set<std::wstring> g_lastPaths;
 
+std::wstring CountWord(size_t n) { return std::to_wstring(n) + L" симв."; }
+
+// Enter in a field: the field keeps its text, the game gets the same Enter (the EA
+// sign-in sends its form). The cursor stays; the field is focused again only after
+// the cursor has left it, or with another Enter on it.
 void EndEdit(void* movie, MovieState& st) {
     std::wstring t;
     GfxGet(movie, (Utf8(g_editPath) + ".text").c_str(), t);
-    GfxCall(movie, "DAOAccess.Unfocus", {});
-    LogLine(L"edit end " + g_editPath + L" \"" + t + L"\"");
-    Speak(L"Готово, " + (t.empty() ? std::wstring(L"пусто") : t), true);
-    g_editPath.clear();
+    LogLine(L"edit end " + g_editPath + L" " + CountWord(t.size()));
+    std::wstring said = t.empty() ? std::wstring(L"пусто") : g_editSecret ? CountWord(t.size()) : t;
+    SpeakPrivate(L"Готово, " + said, true);
+    g_editDonePath = g_editPath;
+    StopTyping(movie);
     st.lastScan = 0;
 }
 
-void RunEdit(void* movie, MovieState& st, DWORD now) {
+// Returns false when the player leaves the field with Up, Down or Tab: those keys
+// are left untouched so the normal key handling moves the cursor in the same frame.
+bool RunEdit(void* movie, MovieState& st, DWORD now) {
     std::wstring t;
     GfxGet(movie, (Utf8(g_editPath) + ".text").c_str(), t);
     if (t != g_editText) {
-        // Echo typing: what was added, or what was erased.
+        // Echo typing: what was added, or what was erased. A password says only
+        // "звёздочка" per typed character.
         std::wstring say;
         if (t.size() > g_editText.size() && t.compare(0, g_editText.size(), g_editText) == 0)
-            say = t.substr(g_editText.size());
+            say = g_editSecret ? std::wstring(L"звёздочка") : t.substr(g_editText.size());
         else if (g_editText.size() > t.size() && g_editText.compare(0, t.size(), t) == 0)
-            say = L"удалено " + g_editText.substr(t.size());
+            say = g_editSecret ? std::wstring(L"удалено, ") + CountWord(t.size())
+                               : L"удалено " + g_editText.substr(t.size());
         else
-            say = t.empty() ? L"пусто" : t;
-        LogLine(L"edit text \"" + t + L"\"");
-        Speak(say, true);
+            say = t.empty() ? std::wstring(L"пусто") : g_editSecret ? CountWord(t.size()) : t;
+        LogLine(L"edit text " + CountWord(t.size()));
+        SpeakPrivate(say, true);
         g_editText = t;
     }
     bool fg = GameIsForeground();
-    // Enter or Tab finish; the other keys belong to the text field (their state is
-    // still tracked so they do not fire when editing ends).
-    const int others[] = {VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_HOME, VK_END};
-    for (int k = 0; k < 6; ++k) KeyFired(g_keys[k], others[k], false, fg, now);
-    bool enter = KeyFired(g_keys[6], VK_RETURN, false, fg, now);
-    bool tab = KeyFired(g_keys[7], VK_TAB, false, fg, now);
-    if (enter || tab) EndEdit(movie, st);
+    auto pressed = [&](int vk) { return fg && (GetAsyncKeyState(vk) & 0x8000) != 0; };
+    // Up / Down / Tab leave the field (enum order in RunActive: 0 Up, 1 Down, 7 Tab).
+    if ((pressed(VK_UP) && !g_keys[0].down) || (pressed(VK_DOWN) && !g_keys[1].down) ||
+        (pressed(VK_TAB) && !g_keys[7].down)) {
+        StopTyping(movie);
+        return false;
+    }
+    // Left, Right, Home, End move the caret in the field (their state is still
+    // tracked so they do not fire when typing ends); Enter finishes.
+    const int caret[] = {VK_LEFT, VK_RIGHT, VK_HOME, VK_END};
+    for (int k = 0; k < 4; ++k) KeyFired(g_keys[2 + k], caret[k], false, fg, now);
+    KeyFired(g_keys[0], VK_UP, false, fg, now);
+    KeyFired(g_keys[1], VK_DOWN, false, fg, now);
+    KeyFired(g_keys[7], VK_TAB, false, fg, now);
+    if (KeyFired(g_keys[6], VK_RETURN, false, fg, now)) EndEdit(movie, st);
+    return true;
 }
 
 // Keys and announcements for the active agent movie.
@@ -1151,7 +1243,10 @@ void RunActive(void* movie, MovieState& st, DWORD now) {
         if (now - st.born < 1500 && st.items.size() != st.prevCount) return;
         g_active = movie;
         g_activeFile = st.file;
+        // A new screen: the old movie's field is not touched (it may be gone).
         g_editPath.clear();
+        g_editDonePath.clear();
+        g_fieldFocused = false;
         g_lastSerial = st.scanSerial;
         g_lastPaths.clear();
         for (const Item& it : st.items) g_lastPaths.insert(it.path);
@@ -1167,12 +1262,13 @@ void RunActive(void* movie, MovieState& st, DWORD now) {
         g_lastPaths.clear();
         for (const Item& it : st.items) g_lastPaths.insert(it.path);
         if (FindPath(st, g_curPath) == SIZE_MAX && kept * 2 < std::max(before, st.items.size())) {
-            g_editPath.clear();
+            StopTyping(movie);
+            g_editDonePath.clear();
             AnnounceScreen(movie, st, L"scene");
             return;
         }
     }
-    if (!g_editPath.empty()) { RunEdit(movie, st, now); return; }
+    if (!g_editPath.empty() && RunEdit(movie, st, now)) return;
 
     // Find the current item again after a rescan.
     size_t idx = FindPath(st, g_curPath);
@@ -1347,6 +1443,9 @@ void RunActive(void* movie, MovieState& st, DWORD now) {
                 std::wstring r;
                 GfxCall(movie, "DAOAccess.Adjust", {Utf8(cur.path), k == K_RIGHT ? 1.0 : -1.0}, &r);
                 LogLine(L"adjust " + cur.path + L" -> " + r);
+                // Dragon Age II attribute rows (agent A.IsAttrRow): why nothing changed.
+                if (r == L"nopoints") Speak(L"Нет свободных очков", true);
+                else if (r == L"nospent") Speak(L"Сюда в этот раз очки не добавлялись", true);
                 SnapshotTexts(st, now);
                 st.lastScan = 0;  // rescan next frame; a new value is spoken as a change
             } else if (cur.kind == L"picker") {
@@ -1388,17 +1487,12 @@ void RunActive(void* movie, MovieState& st, DWORD now) {
             }
             break;
         case K_ENTER: {
-            if (cur.kind == L"edit") {
-                std::wstring r;
-                GfxCall(movie, "DAOAccess.Focus", {Utf8(cur.path)}, &r);
-                LogLine(L"edit start " + cur.path + L" -> " + r);
-                if (r == L"ok") {
-                    g_editPath = cur.path;
-                    g_editText = cur.label;
-                    Speak(L"Ввод текста. Наберите и нажмите Enter", true);
-                } else {
-                    Speak(L"Не удалось начать ввод", true);
-                }
+            if (IsField(cur)) {
+                // Not typing here (finished with Enter, or the focus failed): type
+                // again, the old text selected so typing replaces it.
+                g_editDonePath.clear();
+                if (StartTyping(movie, cur, "all")) Speak(L"Ввод текста, старый текст заменится", true);
+                else Speak(L"Не удалось начать ввод", true);
                 break;
             }
             if (!IsWidget(cur)) { SpeakItem(st, g_curIndex, L"reread"); break; }
@@ -1628,7 +1722,7 @@ void OnMovieAdvance(void* movie) {
     DWORD every = now - st.born < 1500 ? 100u : (now - g_lastKeyAt > 3000 ? 1000u : 400u);
     if (st.agent == AGENT_READY && now - st.lastScan >= every) {
         Scan(movie, st, now);
-        AnnouncePassive(st);
+        AnnouncePassive(movie, st);
     }
 
     // F10: dump the game's data catalogue and the minimap creature batch (research

@@ -16,7 +16,7 @@
 //   0x48D190  thiscall(mode, obj, action, 0, 0), ret 0x10: what
 //             PerformDefaultActionOnTargetMessage (handler 0x4964E0) calls.
 //   GameModeExplore vtable 0xBE13FC (36 slots, offset 0), GameModeCombat 0xBEEE44
-//   (42 slots): their instances are captured by thunks (mov [g], ecx; jmp orig).
+//   (36 slots): their instances are captured by thunks (mov [g], ecx; jmp orig).
 //   World position: found at run time (CalibratePos) by searching the leader's
 //   object for the catalogue position.
 #define WIN32_LEAN_AND_MEAN
@@ -40,7 +40,10 @@ using DefaultActionFn = unsigned char(__thiscall*)(void* mode, void* obj, int ac
 constexpr DWORD kAppPtr = 0xD54494;
 constexpr DWORD kLookup = 0x5A70C0, kAction = 0x459D20, kDefaultAction = 0x48D190, kLootable = 0x5433B0;
 constexpr DWORD kExploreVt = 0xBE13FC, kCombatVt = 0xBEEE44;
-constexpr int kExploreSlots = 36, kCombatSlots = 42;
+// Slot counts read from the exe's .rdata 2026-11-20: after the last function pointer
+// comes data (UTF-16 strings) whose values fall in the exe's range, so InExe cannot
+// catch a count that is too high. 42 combat slots before that overwrote "InCombatMode".
+constexpr int kExploreSlots = 36, kCombatSlots = 36;
 constexpr DWORD kExeLo = 0x400000, kExeHi = 0x400000 + 0xBD5000;
 
 void* volatile g_explore = nullptr;

@@ -20,7 +20,10 @@ static const wchar_t* const kProcesses[] = {
 // The Large Address Aware flag does not change these two.
 struct ProvenBuild { unsigned long ts, size; const wchar_t* name; };
 static const ProvenBuild kProvenBuilds[] = {
-    {0x4f1e9fb5, 0xbd5000, L"DragonAge2.exe 1.04.8524.0"}};
+    {0x4f1e9fb5, 0xbd5000, L"DragonAge2.exe 1.04.8524.0"},
+    // Steam copy under EA's wrapper (NOTEBOOK.md, Game; in-game tests 2026-11-20
+    // 13:03 menus, 14:50 EA sign-in and a save loaded, 15:33 level-up).
+    {0x4f1e9fb5, 0xbd2000, L"DragonAge2.exe 1.04.8524.0 (Steam)"}};
 
 // HKLM keys (32-bit view) with the install folder. Proven on the player's PC
 // 2026-11-19: SOFTWARE\WOW6432Node\BioWare\Dragon Age 2, value Path.

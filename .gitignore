@@ -13,3 +13,5 @@ vendor/ual-9.7.4/*.zip
 # Python caches
 __pycache__/
 *.pyc
+# Logs sent by testers: their play, names and typed text, never published
+testers logs/

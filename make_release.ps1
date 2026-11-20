@@ -32,6 +32,9 @@ foreach ($g in Select-Games $Game) {
         @{ From = "$root\LICENSE";                          To = "$data\LICENSE.txt" },
         @{ From = "$root\README.md";                        To = "$stage\README.md" }
     )
+    # Loader settings a game needs (games\<game>\loader\global.ini, Dragon Age II only).
+    $ini = "$root\games\$g\loader\global.ini"
+    if (Test-Path $ini) { $files += @{ From = $ini; To = "$bin\scripts\global.ini" } }
     foreach ($f in $files) {
         New-Item -ItemType Directory -Force (Split-Path $f.To) | Out-Null
         Copy-Item $f.From $f.To -Force

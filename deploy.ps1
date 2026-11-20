@@ -9,8 +9,8 @@ $root = $PSScriptRoot
 
 # The games' bin_ship folders on the player's PC.
 $GamePaths = @{
-    dao = 'F:\games\Dragon Age - Origins\bin_ship'
-    da2 = 'F:\games\Dragon Age 2.v 1.04 + 16 DLC\bin_ship'
+    dao = 'F:\SteamLibrary\steamapps\common\Dragon Age Ultimate Edition\bin_ship'
+    da2 = 'F:\SteamLibrary\steamapps\common\Dragon Age II\bin_ship'
 }
 
 $selected = Select-Games $Game
@@ -36,6 +36,9 @@ foreach ($g in $selected) {
         @{ From = "$root\lib\prism\third-party\prism\mpl-2.0.txt"; To = "$game\scripts\$mod\third-party\prism\mpl-2.0.txt" },
         @{ From = "$root\lib\prism\third-party\prism\NOTICE";      To = "$game\scripts\$mod\third-party\prism\NOTICE" }
     )
+    # Loader settings a game needs (games\<game>\loader\global.ini, Dragon Age II only).
+    $ini = "$root\games\$g\loader\global.ini"
+    if (Test-Path $ini) { $files += @{ From = $ini; To = "$game\scripts\global.ini" } }
     foreach ($f in $files) {
         New-Item -ItemType Directory -Force (Split-Path $f.To) | Out-Null
         if ((Test-Path $f.To) -and ($f.To -like '*\dinput8.dll')) {

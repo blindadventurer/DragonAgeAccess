@@ -18,15 +18,18 @@ Dragon Age: Origins (пройдены пролог, Остагар, Дикие �
 - Читает меню: главное меню, настройки, создание персонажа целиком (раса, класс, внешность, характеристики, навыки, таланты, имя), диалоги с вариантами ответа.
 - Инвентарь, лист персонажа, повышение уровня, умения, специализации, магазин: разделы переключаются стрелками влево и вправо, предметы читаются с описанием, покупка и продажа работают.
 - Подарки спутникам, одобрение спутников, травмы, выбор отряда в лагере.
+- Кодекс: разделы, записи по названиям и их текст по абзацам.
 
 Dragon Age II (пройдены создание персонажа и пролог):
 
-- Читает меню: стартовый экран, главное меню, создание персонажа (выбор героя, внешность, предыстория, сложность), паузу, сохранение, инвентарь, лист персонажа, обучающие подсказки, реплики в диалогах.
+- Читает меню: стартовый экран, вход в учётную запись EA, список дополнений, главное меню, создание персонажа (выбор героя, внешность, предыстория, сложность), паузу, сохранение, инвентарь, лист персонажа, распределение очков характеристик при повышении уровня, обучающие подсказки, реплики в диалогах.
 
 В обеих играх:
 
 - Сканер: список того, что вокруг, с расстоянием и направлением, по категориям: персонажи, статисты, добыча, объекты, выходы, места, задания, отряд, враги.
-- Автоходьба к выбранному объекту, отмена клавишами движения.
+- Автоходьба к выбранному объекту, отмена клавишами движения. Enter на дальнем объекте сначала ведёт к нему, а потом выполняет действие.
+- Поля ввода (имя персонажа, название сохранения): мод проговаривает набранное, пароли не произносит.
+- Сообщения о полученных деньгах и предметах, о паузе.
 - Текст текущего задания.
 - Бой: список ближайших врагов, атака клавишей Enter, здоровье врагов и отряда, сообщения об убитых.
 - Панель быстрого доступа: названия умений, перезарядка, включённые режимы.
@@ -34,9 +37,26 @@ Dragon Age II (пройдены создание персонажа и прол�
 ## Что нужно
 
 - Windows, экранный диктор (NVDA рекомендуется).
-- Dragon Age: Origins - Ultimate Edition. Мод проверен на DAOrigins.exe версии 1.05.13263.0 (GOG).
-- Dragon Age II версии 1.04 (дополнения поддерживаются). Мод проверен на DragonAge2.exe версии 1.04.8524.0.
-- На других сборках игры (Steam, EA app) мод может не заработать. Установщик предупредит об этом. Если всё же попробуете, приложите журнал мода к сообщению об ошибке.
+- Dragon Age: Origins - Ultimate Edition. Мод проверен на DAOrigins.exe версии 1.05.13263.0 в GOG и в Steam.
+- Dragon Age II версии 1.04 (дополнения поддерживаются). Мод проверен на DragonAge2.exe версии 1.04.8524.0, в том числе в Steam.
+- На других сборках игры (например EA app) мод может не заработать. Установщик предупредит об этом. Если всё же попробуете, приложите журнал мода к сообщению об ошибке.
+
+## Если игра из Steam
+
+Dragon Age: Origins:
+
+- Steam запускает сначала окно запуска игры (лаунчер), а в нём кнопка «Играть» не видна экранному диктору. Чтобы Steam сразу запускал саму игру, откройте в Steam свойства игры и в поле «Параметры запуска» впишите строку ниже, заменив путь на папку вашей игры, если она стоит в другом месте:
+
+```
+"C:\Program Files (x86)\Steam\steamapps\common\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe" %command%
+```
+
+- В Steam-версии нет русского текста. Русский перевод делает команда ENPY: https://enpy.net/projects/localizations/games/dragon_age_origins/
+- Установщик не включает Steam-версии доступ к 4 ГБ памяти: файл игры защищён Steam, и после изменения игра может перестать запускаться. Без этого в больших локациях игра может вылетать.
+
+Dragon Age II:
+
+- Игра запускается через EA app. Чтобы работали дополнения, войдите в учётную запись EA на экране входа в игре: мод его читает. Пароль мод не произносит и не пишет в журнал.
 
 ## Установка
 
@@ -48,7 +68,7 @@ Dragon Age II (пройдены создание персонажа и прол�
 4. Дальше установщик задаёт вопросы в обычных окнах с кнопками. Везде можно отвечать «Да». Он:
    - скачивает последнюю версию мода для выбранной игры;
    - копирует файлы мода в папку игры и в папку override в Документах, а потом проверяет, что они на месте;
-   - включает игре доступ к 4 ГБ памяти, иначе игра может вылетать в больших локациях (копия исходного exe сохраняется);
+   - включает игре доступ к 4 ГБ памяти, иначе игра может вылетать в больших локациях (копия исходного exe сохраняется). Для версий из Steam и EA app этого не делает, см. выше;
    - снимает с камеры клавиши Page Up и Page Down, они нужны сканеру; колесо мыши продолжит управлять камерой (копия файла настроек сохраняется). Если игра ещё ни разу не запускалась, мод сделает это сам после её первого запуска;
    - предупреждает, если ваша версия игры ещё не проверялась с модом.
 5. Запустите игру как обычно. При запуске вы услышите «Dragon Age Access загружен» в Origins или «Dragon Age 2 Access загружен» в Dragon Age II.
@@ -136,18 +156,30 @@ Mods that make Dragon Age: Origins and Dragon Age II playable for blind players:
 
 ## Features
 
-Dragon Age: Origins (the prologue, Ostagar, the Korcari Wilds and Lothering have been played): menus, the whole character creation, conversations with their replies; inventory, character record, level-up, abilities, specialisations and the store with sections on Left and Right, item descriptions, buying and selling; gifts, approval, injuries, party selection at camp.
+Dragon Age: Origins (the prologue, Ostagar, the Korcari Wilds and Lothering have been played): menus, the whole character creation, conversations with their replies; inventory, character record, level-up, abilities, specialisations and the store with sections on Left and Right, item descriptions, buying and selling; gifts, approval, injuries, party selection at camp; the codex (groups, entries by title, their text paragraph by paragraph).
 
-Dragon Age II (character creation and the prologue have been played): start screens, main menu, character creation (hero, appearance, background, difficulty), pause menu, saving, inventory, character record, tutorial popups, conversation lines.
+Dragon Age II (character creation and the prologue have been played): start screens, EA sign-in, the DLC list, main menu, attribute points at level-up, character creation (hero, appearance, background, difficulty), pause menu, saving, inventory, character record, tutorial popups, conversation lines.
 
-Both games: an object scanner with distance and direction by category (characters, extras, loot, objects, exits, places, quests, party, enemies); walking to the selected object (movement keys cancel); the current quest text; combat with the nearest enemies, attack with Enter, enemy and party health, kill reports; the quickbar with ability names, cooldowns and sustained modes.
+Both games: an object scanner with distance and direction by category (characters, extras, loot, objects, exits, places, quests, party, enemies); walking to the selected object (movement keys cancel; Enter on a far object walks there, then acts); text fields echo what is typed, passwords are never spoken; money, item and pause reports; the current quest text; combat with the nearest enemies, attack with Enter, enemy and party health, kill reports; the quickbar with ability names, cooldowns and sustained modes.
 
 ## Requirements
 
 - Windows and a screen reader (NVDA recommended).
-- Dragon Age: Origins - Ultimate Edition, proven on DAOrigins.exe 1.05.13263.0 (GOG).
-- Dragon Age II 1.04 (DLC supported), proven on DragonAge2.exe 1.04.8524.0.
-- Other builds (Steam, EA app) may not work; the installer warns about it. Please attach the mod's log to a report.
+- Dragon Age: Origins - Ultimate Edition, proven on DAOrigins.exe 1.05.13263.0 (GOG and Steam).
+- Dragon Age II 1.04 (DLC supported), proven on DragonAge2.exe 1.04.8524.0, Steam included.
+- Other builds (for example the EA app) may not work; the installer warns about it. Please attach the mod's log to a report.
+
+## Steam copies
+
+- Origins: Steam starts the game's launcher, whose Play button a screen reader cannot see. In Steam, game properties, set the launch options to the game exe followed by %command% (adjust the path to your library):
+
+```
+"C:\Program Files (x86)\Steam\steamapps\common\Dragon Age Ultimate Edition\bin_ship\DAOrigins.exe" %command%
+```
+
+- Origins on Steam has no Russian text; the ENPY team makes the Russian translation: https://enpy.net/projects/localizations/games/dragon_age_origins/
+- The installer does not give Steam or EA app copies the 4 GB memory flag: their exe is protected by the store and may stop starting once changed.
+- Dragon Age II runs through the EA app; sign in to your EA account on the in-game sign-in screen (the mod reads it, and never speaks or logs the password) to enable the DLC.
 
 ## Install
 

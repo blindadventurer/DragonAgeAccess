@@ -14,8 +14,11 @@
 // Interaction (PerformDefaultActionOnTargetMessage handler 0x713350):
 //   action = 0x70CAD0(obj) (cdecl), then GameModeExplore::0x712830(obj, action, 0)
 //   (thiscall, ret 0xC). The explore (or combat) mode instance is captured by thunks
-//   on its vtables (GameModeExplore 0xB16374, 39 slots; GameModeCombat 0xB1D89C,
-//   32 slots), which record ecx and jump to the original.
+//   on its vtables (GameModeExplore 0xB16374, 32 slots; GameModeCombat 0xB1D89C,
+//   32 slots), which record ecx and jump to the original. Slot counts read from the
+//   decrypted Steam exe 2026-11-20: after the last function pointer comes data (a
+//   UTF-16 string, floats) whose values happen to fall in the exe's range, so the
+//   InExe check cannot catch a count that is too high.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <cmath>
@@ -36,15 +39,15 @@ using DefaultActionFn = unsigned char(__thiscall*)(void* mode, void* obj, int ac
 
 constexpr DWORD kLookup = 0xA58190, kAction = 0x70CAD0, kDefaultAction = 0x712830, kLootable = 0x6AB100;
 constexpr DWORD kExploreVt = 0xB16374, kCombatVt = 0xB1D89C;
-constexpr int kExploreSlots = 39, kCombatSlots = 32;
-// GameModePartyPicker (RTTI vtable, 39 slots). Its click handler
+constexpr int kExploreSlots = 32, kCombatSlots = 32;  // 39 before 2026-11-20 overwrote "Target Required"
+// GameModePartyPicker (RTTI vtable, 30 slots). Its click handler
 // SelectPartyMemberUnderCursorMessage 0x768AE0: skips while bytes +0xA0 / +0xA1
 // are set; finds the entry under the mouse (0x7675B0) in the array +0x8C..+0x90
 // (0x34 bytes each: +0 creature id, +4 creature object, +8 state, +0x10 locked
 // byte, +0x24 slot); state 2 -> 0x766040(entry) adds (state 1, word +0xA2 = count,
 // refused at 4), state 1 -> 0x7661B0(entry) removes; then 0x7658E0 on the entry.
 constexpr DWORD kPickerVt = 0xB1D31C, kPickerAdd = 0x766040, kPickerRemove = 0x7661B0, kPickerAfter = 0x7658E0;
-constexpr int kPickerSlots = 39;
+constexpr int kPickerSlots = 30;  // 39 before 2026-11-20 overwrote "LockedPartyMembers"
 constexpr DWORD kExeLo = 0x400000, kExeHi = 0x400000 + 0x9EC0A2;
 
 void* volatile g_explore = nullptr;

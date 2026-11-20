@@ -23,7 +23,12 @@ static const wchar_t* const kProcesses[] = {
 // The Large Address Aware flag does not change these two.
 struct ProvenBuild { unsigned long ts, size; const wchar_t* name; };
 static const ProvenBuild kProvenBuilds[] = {
-    {0x4eb19d53, 0x9ec0a2, L"DAOrigins.exe 1.05.13263.0 (GOG)"}};
+    {0x4eb19d53, 0x9ec0a2, L"DAOrigins.exe 1.05.13263.0 (GOG)"},
+    // Steam copy, same code (NOTEBOOK.md, Game): SteamStub-wrapped as Steam ships it
+    // (in-game test 2026-11-20 13:12), and unwrapped by Steamless with LAA
+    // (in-game tests 2026-11-20 13:43 and 14:54).
+    {0x4eb19d53, 0xa49000, L"DAOrigins.exe 1.05.13263.0 (Steam)"},
+    {0x4eb19d53, 0x9ed000, L"DAOrigins.exe 1.05.13263.0 (Steam, Steamless)"}};
 
 // HKLM keys (32-bit view) with the install folder. GOG games are found through the
 // GOG registry keys in the installer (proven on the player's PC). This BioWare key is

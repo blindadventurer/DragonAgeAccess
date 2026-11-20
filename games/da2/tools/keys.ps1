@@ -17,7 +17,7 @@ public static class DA2Keys {
 }
 '@
 Add-Type -AssemblyName System.Windows.Forms
-$log = 'F:\games\Dragon Age 2.v 1.04 + 16 DLC\bin_ship\scripts\DA2Access.log'
+$log = 'F:\SteamLibrary\steamapps\common\Dragon Age II\bin_ship\scripts\DA2Access.log'
 $n = (Get-Content $log -Encoding UTF8).Count
 foreach ($s in ($Steps -split ';')) {
     $p = $s.Trim() -split '\s+'
