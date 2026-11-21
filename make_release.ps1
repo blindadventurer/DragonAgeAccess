@@ -30,7 +30,8 @@ foreach ($g in Select-Games $Game) {
         @{ From = "$root\lib\prism\third-party\prism\NOTICE";      To = "$data\third-party\prism\NOTICE" },
         @{ From = "$root\vendor\ual-9.7.4\LICENSE.txt";     To = "$data\third-party\ultimate-asi-loader\LICENSE.txt" },
         @{ From = "$root\LICENSE";                          To = "$data\LICENSE.txt" },
-        @{ From = "$root\README.md";                        To = "$stage\README.md" }
+        @{ From = "$root\README.md";                        To = "$stage\README.md" },
+        @{ From = "$root\CHANGELOG.md";                     To = "$stage\CHANGELOG.md" }
     )
     # Loader settings a game needs (games\<game>\loader\global.ini, Dragon Age II only).
     $ini = "$root\games\$g\loader\global.ini"
@@ -46,7 +47,7 @@ foreach ($g in Select-Games $Game) {
     if (Test-Path $zip) { Remove-Item -Force $zip }
     # tar.exe (Windows 10+) writes zip entries with forward slashes; Compress-Archive of
     # PowerShell 5.1 writes backslashes, which some extractors do not take as folders.
-    & "$env:SystemRoot\System32\tar.exe" -a -c -f $zip -C $stage bin_ship override README.md
+    & "$env:SystemRoot\System32\tar.exe" -a -c -f $zip -C $stage bin_ship override README.md CHANGELOG.md
     if ($LASTEXITCODE -ne 0) { throw "packing failed ($LASTEXITCODE)" }
     Write-Host "Release $zip"
     Write-Host "SHA-256 $((Get-FileHash $zip -Algorithm SHA256).Hash)"

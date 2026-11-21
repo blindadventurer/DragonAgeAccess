@@ -85,6 +85,8 @@ Dragon Age II:
 
 Установка вручную, без установщика: в архиве DAOAccess или DA2Access с номером версии есть папки bin_ship и override. Содержимое bin_ship скопируйте в папку bin_ship игры. Файл из override скопируйте в Документы\BioWare\Dragon Age\packages\core\override для Origins или в Документы\BioWare\Dragon Age 2\packages\core\override для Dragon Age II. Если этой папки нет, создайте её.
 
+Что изменилось в каждой версии, написано в файле [CHANGELOG.md](CHANGELOG.md) (он есть и в архиве мода) и на странице релиза на GitHub.
+
 ## Удаление
 
 Запустите установщик ещё раз, выберите игру и нажмите «Удалить мод». Он удалит мод и предложит вернуть исходный exe игры, клавиши камеры, прежний язык текста и прежние параметры запуска в Steam.
@@ -200,6 +202,8 @@ One installer for both games; it downloads the newest mod itself, so it needs th
 To update, run the same installer again: it compares the installed version with the newest and offers "Update to version ...". If it reports that mod files vanished right after installing, an antivirus removed them (the mod loader dinput8.dll is often taken for a threat by mistake): add the game folder to the antivirus exclusions and run the installer again.
 
 Manual install: the DAOAccess-<version>.zip and DA2Access-<version>.zip archives hold bin_ship and override. Copy the contents of bin_ship into the game's bin_ship, and the .gfx file from override into Documents\BioWare\Dragon Age\packages\core\override (Origins) or Documents\BioWare\Dragon Age 2\packages\core\override (Dragon Age II).
+
+What changed in each version: [CHANGELOG.md](CHANGELOG.md) (in Russian, also inside the mod archive) and the release page on GitHub.
 
 ## Uninstall
 

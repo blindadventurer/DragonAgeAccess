@@ -192,6 +192,12 @@ player (the question was left open):
   installer reads github.com/<repo>/releases/latest, and a prerelease is never
   "latest". The zip name must be <Mod>-X.zip for tag vX. Steps: make_release.ps1
   -Version X, then gh release create vX with the three files of release\.
+- Changelog (player, 2026-11-21: "когда выпускаем релиз писать небольшой чейнджлог"):
+  every release first gets a section at the top of CHANGELOG.md (Russian, newest
+  first, short player-facing bullets: what changed or got better, in which game), and
+  the same bullets go into the release notes under "Что нового". make_release.ps1
+  packs CHANGELOG.md into both zips next to README.md (the installer copies only
+  bin_ship\ and override\, so testers read it on GitHub or in the zip).
 - 2026-11-19/20 (player: "под ключ", "один установщик с выбором игры", "установщик
   проверяет GitHub и обновляет мод"): one installer for both games,
   core\installer\setup.cpp (games_table.h takes both games' names from their game.h),
