@@ -270,7 +270,21 @@ Each fact with how it was proven (file and line, log line, in-game test).
   3 unlockable), OnButtonAction learns / unlearns (Abilities.Learn ->
   GUI.SelectedChar.BuyAbility), Confirm_mc (ConfirmSpentAbilities) appears after a
   purchase; the agent already reads these icons as "ability" (Origins code) and
-  presses them with SimulateButtonPush. Built and deployed, NOT tested.
+  presses them with SimulateButtonPush. Proven in play 2026-11-20 22:01 (test log).
+  More from the FFDec exports (2026-11-20 late, agent v37): stat rows StatsEntry
+  (CharacterRecord.MakeCoreStatInit) hold the name in TextLeft_mc (Localization
+  5000057 / 336230 / 6105008 / 371050) and the number in RollOver_mc.StatNum_mc;
+  points left are AttributePoints_mc with the caption PointsRemaining_mc (6086721);
+  abilities.gfx shows AbilityPoints_mc (GUI.SelectedChar.Attributes.39.Total,
+  caption AvailablePointsHeader_mc 6207904) and, for the hero only, SpecPoints_mc
+  (Attributes.40, caption 6207905); Abilities.CanLearnAbility = nDisplayState 2
+  AND Ability.CreatureHasPointsToBuy; AlmightyContainer.GetCurrentTree() is the
+  open tree (m_aClassContainers[m_nSelectedGUIType]).
+- Journal (FFDec export of patch\journal.gfx to games\da2\work\as\journal,
+  2026-11-20): section icons NavIco1-3 (Journal.InitializeTopLevelNavigation) get
+  their text through ButtonBase.SetText (Localization 6165987 current quests, 336165
+  completed, 6165989 codex), kept in m_oButtonProperties.ButtonText and never drawn;
+  ButtonBase.GetButtonText returns it. The agent reads it since v37 (NOT tested).
 - EA sign-in screen (mod log 13:04): start menu "ВОЙДИТЕ В СЕТЬ"
   (StartMenuButtons_mc.SignInButton) opens movie "login", title "УПРАВЛЕНИЕ
   УЧЕТНОЙ ЗАПИСЬЮ", e-mail box _level0.AccountNameInput_mc.TextField, password box
@@ -464,6 +478,21 @@ Each fact with how it was proven (file and line, log line, in-game test).
   install) and Settings\KeyBindings.ini with the zoom keys freed (backup
   KeyBindings.ini.before-access).
 
+## Puzzle map
+
+Found 2026-11-20 by listing resource names in every .erf/.rim (ERF V3.0; most
+names are hashed, plots keep theirs). Main campaign: no plot or resource named
+like a puzzle (443 plots in campaign_base). Its plot files keep no readable flag
+names, so the details below are HYPOTHESIS.
+
+- Mark of the Assassin (da2_prc_eye): plt_eye450pt_puzzles (Chateau Haine area
+  eye450), table statecnt_puzzle.gda (packages\core\data\2da.rim). Highest risk.
+- Legacy (da2_prc_drk): plt_drk000pt_altar and altar_item_a-d, altar_notes (items
+  placed on an altar following notes), plt_drk000pt_xmarks (treasure map).
+- The Black Emporium (da2_prc_one): plt_tbe100pt_mirror (the mirror, appearance
+  change, not a puzzle); its ERF is encrypted, erf3.py skips it.
+- Plan: NOTEBOOK.md, Puzzle plan.
+
 ## Pitfalls
 
 What went wrong and how to avoid it.
@@ -603,6 +632,35 @@ One line per in-game test: date, what was tested, result.
   Spacing). Abilities: inside a tree Up/Down said only "Конец/Начало списка"
   (every icon of a tree sits in one AbilityChainContainer_mc, one chain); Left/
   Right worked. Fix menu.cpp MoveInSection: with one chain on the screen Up/Down
-  step through it. Both built and deployed 21:2x, NOT tested. Check: attributes
-  list 1 из 6 to 6 из 6 with Телосложение, points still added to the right row;
-  in a tree Up/Down go icon by icon; Origins inventory still counts "N из M".
+  step through it. Both built and deployed 21:2x. PROVEN by the next test (22:01).
+- 2026-11-20 22:01-22:08 (player, build 21:15, agent v36): level-up of all four
+  (Гаррет, Бетани, Карвер; attributes, then abilities, confirmed each time), then the
+  journal. Proven: attribute list 1 из 6 .. 6 из 6 with Телосложение, Right / Left
+  add and take back on the right row, "Нет свободных очков"; ability trees open,
+  Up/Down and Left/Right step icon by icon, Enter learns ("Могучий удар, изучено"),
+  Подтвердить on both screens; the game then opens the next character's attributes.
+  Player: still "неудобно", "недоделанные вещи", journal buttons unlabeled. Found in
+  the log: the stats Урон / Атака / Защита / Броня read as bare numbers ("7, 11 из
+  16"); the points left heard as "Ур. 2 Воин, 2" (a bare number took the text before
+  it) and repeated in every row as "свободных очков N"; the next character's
+  attributes announced without the name (22:03:06, Бетани); ability points never
+  read; an available ability without points still "можно изучить"; requirement lines
+  run together ("Требуется: Ур. 8 Требуется: Могучий удар"); on opening a tree the
+  previous tree's icons were read first (22:05:23); journal section icons NavIco1-3
+  "без подписи". Fixed in agent v37 and menu.cpp (Proven facts, Level-up and
+  Journal), built and deployed 2026-11-20 ~22:40, NOT tested. Check: the stats say
+  their names; "Оставшиеся очки 3" once on the screen and after each change; rows
+  "Сила, 14, Стойкость 4, 1 из 6"; after one character is confirmed the next one's
+  name is said; "Очки способностей N" on the abilities screen; an ability without
+  points says "не хватает очков"; requirements as separate sentences; opening a tree
+  reads only its own icons; journal tabs read "Текущие задания" (or the game's
+  words), "Выполненные", "Кодекс".
+- 2026-11-20 late (player: ability trees feel random, learnable ones hard to find):
+  cause, icons were read by screen position (rows), mixing abilities and upgrades,
+  and the tree still slides in when announced. Agent v38 (A.TreeOf: chains = a full
+  ability then its upgrades, linked by Ability.aVisiblePrereqIDs / IsMinorAbility,
+  depth first from the root, branches top to bottom; tree buttons say "можно
+  изучить N") and menu.cpp (Item.chain / treeOrder / treeWords; Up/Down from ability
+  to ability, Right to its upgrades, Ctrl+Up/Down to the next learnable; a tree
+  opens on its first learnable ability). Built and deployed to both games 2026-11-20
+  late (player approved), NOT tested.

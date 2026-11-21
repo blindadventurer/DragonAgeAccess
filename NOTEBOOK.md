@@ -38,6 +38,17 @@ games\da2\NOTEBOOK.md (Dragon Age II).
 
 ## Status
 
+- 2026-11-20 late: agent v38 (Dragon Age II ability trees in chains, see
+  games\da2\NOTEBOOK.md test log) deployed to both games on top of v37, NOT tested.
+- 2026-11-20 ~22:40: agent v37 and menu.cpp built for both games and deployed to
+  both (player approved), NOT tested. Dragon Age II level-up and journal fixes
+  (games\da2\NOTEBOOK.md, test log 22:01). Shared changes to check in Origins too:
+  a short text with line breaks is read as sentences ("A. B") instead of run
+  together; an icon button with no visible text reads its hidden button text
+  (ButtonBase.GetButtonText) before "без подписи"; on screens named CharacterRecord
+  or abilities the selected character's name is said when no text above the first
+  widget holds it.
+
 - 2026-11-20 evening: agent v35 (shared core\agent and menu.cpp) built for both
   games, deployed to both (deploy.ps1, 2026-11-20 evening), NOT tested: Origins codex readable (games\dao\NOTEBOOK.md,
   Stages, Codex, money and pause v1), money alerts in coins, pause from the game's
@@ -125,6 +136,29 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   test of the installer with NVDA and of both games. After it passes: archive
   blindadventurer/DragonAgeOriginsAccess and blindadventurer/DragonAge2Access with a
   link to the new repository (README note, then gh repo archive).
+
+## Puzzle plan (idea, 2026-11-20, not started)
+
+The player worries that puzzles could stop a blind playthrough. Where they are:
+the Puzzle map section of each game notebook (Origins has most; the Dragon Age II
+main campaign has none, only the DLC). The plan discussed, not yet chosen by the
+player (the question was left open):
+
+- Prepare in advance from game files, no tests needed: extract the puzzle area
+  (.are) and its scripts, list the portals, plates and levers with positions and
+  what switches them; find the solution (in scripts, else a walkthrough on the
+  web); write a short spoken hint the mod says on entering the area.
+- General improvements that help everywhere: the scanner says an object's state
+  (lever down, plate pressed); in the Circle Tower Fade, a "current form" line.
+- Check on the spot only what files cannot show: whether the scanner sees these
+  objects in the live game and under which names, how walking copes (walls, the
+  Gauntlet bridge). Ask the player to save just before the puzzle so a test is one
+  or two short runs.
+- Reaching a puzzle early, both HYPOTHESIS: a save downloaded from the web (ask
+  first), or the Origins developer console with BioWare's own test scripts
+  (resources zz_tr_tour_gauntlet_puzzles.utt, zz_tr_tour_gauntlet_riddles.utt).
+- Order: Circle Tower Fade first (first in the story and the hardest), then the
+  Gauntlet, then the rest as the player gets near them.
 
 ## Decisions
 

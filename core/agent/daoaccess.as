@@ -12,7 +12,7 @@
 //   button  : any clip with SimulateButtonPush, or a plain onRelease handler
 
 var A = new Object();
-A.ver = 36;  // 36: DA2 list rows by NumEntries and VisibleListIndex; 35: codex names, long texts by paragraph, money alerts, pause state; 34: button labels not listed twice, DA2 ability trees; 33: DA2 attribute rows
+A.ver = 38;  // 38: DA2 ability trees in chains (ability, then its upgrades), learnable counts; 37: DA2 level-up and journal labels (stats, points, nav icons), only the open ability tree, short multi-line texts by sentence; 36: DA2 list rows by NumEntries and VisibleListIndex; 35: codex names, long texts by paragraph, money alerts, pause state; 34: button labels not listed twice, DA2 ability trees; 33: DA2 attribute rows
 _global.DAOAccess = A;
 
 A.Clean = function(s) {
@@ -115,7 +115,217 @@ A.AbilityState = function(ab) {
     }
     if (ab.nDisplayState == 1) return "have";
     if (ab.nDisplayState == 3) return "locked";
+    // DA2 (abilities.gfx Abilities.CanLearnAbility): available AND enough points;
+    // without points the game does nothing on a click, yet the icon read "можно
+    // изучить" (log 2026-11-20 22:02).
+    if (typeof(ab.CreatureHasPointsToBuy) == "function" && !ab.CreatureHasPointsToBuy("GUI.SelectedChar"))
+        return "nopoints";
     return "avail";
+};
+
+// Game string by its Localization id (the movie's own Localization class), or the
+// fallback when the movie has none.
+A.Loc = function(id, fallback) {
+    var s = "";
+    if (_global.Localization != undefined && typeof(_global.Localization.GetString) == "function")
+        s = A.StripTags(_global.Localization.GetString(id));
+    if (s == "" || s.charAt(0) == "?") s = A.Tlk(id);
+    if (s == "" || s.charAt(0) == "?") s = fallback;
+    return s;
+};
+
+// DA2 ability icon of a tree that is not the open one (abilities.gfx
+// AlmightyContainer.GetCurrentTree): while a tree opens, the one closed before
+// still shows for a few frames and its icons were read first (log 2026-11-20
+// 22:05:23: "Ледяная хватка" of Стихии on opening Созидание).
+A.OtherTree = function(c) {
+    var t = c._parent;
+    var d = 0;
+    while (t != undefined && d < 8) {
+        if (t.m_mcChainContainer != undefined && t.m_nGUIType != undefined) break;
+        t = t._parent;
+        d++;
+    }
+    if (t == undefined || d >= 8) return false;
+    var all = t._parent;
+    if (typeof(all.GetCurrentTree) != "function" || typeof(all.InChainSelection) != "function") return false;
+    if (all.InChainSelection() == true) return false;
+    var cur = all.GetCurrentTree();
+    return cur != undefined && cur != t;
+};
+
+// DA2 ability tree in reading order. The icons sit at their tree positions
+// (Ability.nAbilityTreeX / Y) and were read top to bottom, left to right, which
+// mixed abilities and upgrades and, while the tree still slid in, started on an
+// arbitrary icon (player 2026-11-20: "кидает как будто бы на случайную
+// способность"). Structure from abilities.gfx: AbilityChainContainer.m_aAbilityIcons
+// holds every icon of the tree; an upgrade is a minor ability (IsMinorAbility,
+// nUseType 4) whose aVisiblePrereqIDs names the ability it improves; the links
+// between full abilities (GenerateLinks) come from the same field. Chains: each full
+// ability followed by its upgrades; chains in tree order from the root (depth
+// first, branches top to bottom). Cached per scan by the container's path.
+A.TreeY = function(ic) {
+    var v = Number(ic.m_oAbility.nAbilityTreeY);
+    return isNaN(v) ? ic._y : v;
+};
+
+A.TreeX = function(ic) {
+    var v = Number(ic.m_oAbility.nAbilityTreeX);
+    return isNaN(v) ? ic._x : v;
+};
+
+A.ByTreePos = function(a, b) {
+    var d = A.TreeY(a) - A.TreeY(b);
+    if (d == 0) d = A.TreeX(a) - A.TreeX(b);
+    return d < 0 ? -1 : (d > 0 ? 1 : 0);
+};
+
+A.IsMinor = function(ab) {
+    if (typeof(ab.IsMinorAbility) == "function") return ab.IsMinorAbility() == true;
+    return Number(ab.nUseType) == 4;
+};
+
+A.TreeOf = function(cc) {
+    var key = targetPath(cc);
+    if (A.treeCache[key] != undefined) return A.treeCache[key];
+    var icons = cc.m_aAbilityIcons;
+    var byId = new Object();
+    var i = 0;
+    var ic;
+    while (i < icons.length) {
+        ic = icons[i];
+        if (ic.m_oAbility != undefined) byId[String(ic.m_oAbility.nID)] = ic;
+        i++;
+    }
+    // Parent of each icon: the first listed prerequisite that is a full ability of
+    // this tree.
+    var parentOf = function(ic) {
+        var pre = ic.m_oAbility.aVisiblePrereqIDs;
+        var j = 0;
+        var p;
+        while (pre != undefined && j < pre.length) {
+            p = byId[String(pre[j])];
+            if (p != undefined && p != ic && !A.IsMinor(p.m_oAbility)) return p;
+            j++;
+        }
+        return undefined;
+    };
+    var kids = new Object();   // full ability id -> full abilities after it
+    var ups = new Object();    // full ability id -> its upgrades
+    var tops = new Array();
+    var par;
+    var pid;
+    i = 0;
+    while (i < icons.length) {
+        ic = icons[i];
+        i++;
+        if (ic.m_oAbility == undefined) continue;
+        par = parentOf(ic);
+        if (A.IsMinor(ic.m_oAbility) && par != undefined) {
+            pid = String(par.m_oAbility.nID);
+            if (ups[pid] == undefined) ups[pid] = new Array();
+            ups[pid].push(ic);
+        } else if (par != undefined) {
+            pid = String(par.m_oAbility.nID);
+            if (kids[pid] == undefined) kids[pid] = new Array();
+            kids[pid].push(ic);
+        } else {
+            tops.push(ic);  // the tree's root, or an upgrade whose ability is not here
+        }
+    }
+    var chains = new Array();
+    var done = new Object();
+    var visit = function(m) {
+        var id = String(m.m_oAbility.nID);
+        if (done[id] == true) return;
+        done[id] = true;
+        var ch = new Array();
+        ch.push(m);
+        var u = ups[id];
+        if (u != undefined) {
+            u.sort(A.ByTreePos);
+            var q = 0;
+            while (q < u.length) { ch.push(u[q]); q++; }
+        }
+        chains.push(ch);
+        var k = kids[id];
+        if (k != undefined) {
+            k.sort(A.ByTreePos);
+            var r = 0;
+            while (r < k.length) { visit(k[r]); r++; }
+        }
+    };
+    tops.sort(A.ByTreePos);
+    i = 0;
+    while (i < tops.length) { visit(tops[i]); i++; }
+    // Anything a loop in the data left out goes last, one chain each.
+    i = 0;
+    while (i < icons.length) {
+        if (icons[i].m_oAbility != undefined) visit(icons[i]);
+        i++;
+    }
+    // Per icon path: "chain|order|words" (see A.TreeField).
+    var info = new Object();
+    var n = 0;
+    var c = 0;
+    var s;
+    var w;
+    while (c < chains.length) {
+        s = 0;
+        while (s < chains[c].length) {
+            if (s == 0) {
+                w = (c + 1) + " из " + chains.length;
+                if (chains[c].length > 1) w += ", улучшений " + (chains[c].length - 1) + ", стрелка вправо";
+            } else {
+                w = "улучшение " + s + " из " + (chains[c].length - 1);
+            }
+            info[targetPath(chains[c][s])] = c + "|" + n + "|" + w;
+            n++;
+            s++;
+        }
+        c++;
+    }
+    A.treeCache[key] = info;
+    return info;
+};
+
+// Extra field of an ability icon line in a DA2 tree, "" elsewhere.
+A.TreeField = function(c) {
+    var cc = c._parent;
+    if (cc.m_aAbilityIcons == undefined || cc.m_mapAbilityIcons == undefined) return "";
+    var f = A.TreeOf(cc)[targetPath(c)];
+    return (f == undefined) ? "" : f;
+};
+
+// How many abilities of a DA2 tree can be learned now (tree buttons say it).
+A.TreeLearnable = function(t) {
+    var icons = t.m_mcChainContainer.m_aAbilityIcons;
+    var n = 0;
+    var i = 0;
+    while (icons != undefined && i < icons.length) {
+        if (icons[i].m_oAbility != undefined && A.AbilityState(icons[i].m_oAbility) == "avail") n++;
+        i++;
+    }
+    return n;
+};
+
+// DA2 character record stat (characterrecord.gfx StatsEntry, MakeCoreStatInit):
+// the name is in TextLeft_mc, the number in RollOver_mc.StatNum_mc; read before as
+// the bare number ("7", "69", log 2026-11-20 22:02:17).
+A.IsCoreStat = function(c) {
+    return c.RollOver_mc.StatNum_mc != undefined && typeof(c.SimulateButtonPush) == "function";
+};
+
+A.CoreStatName = function(c) {
+    var t = A.TextOf(c.TextLeft_mc);
+    if (t == "") t = A.TextOf(c.RollOver_mc.TextLeft_mc);
+    if (t != "") return t;
+    // Localization ids of CharacterRecord.SetupInitFunctions.
+    if (c._name == "Damage_mc") return A.Loc(5000057, "Урон");
+    if (c._name == "Attack_mc") return A.Loc(336230, "Атака");
+    if (c._name == "Defense_mc") return A.Loc(6105008, "Защита");
+    if (c._name == "Armor_mc") return A.Loc(371050, "Броня");
+    return "";
 };
 
 A.IsAttrRow = function(c) {
@@ -123,22 +333,19 @@ A.IsAttrRow = function(c) {
         _global.CharacterRecord != undefined && typeof(_global.CharacterRecord.ChangeAttribute) == "function";
 };
 
-// Value of an attribute row: "15, Урон 12, свободных очков 2" (the matching stat
-// and, while points can be spent or taken back, the points left).
+// Value of an attribute row: "15, Урон 12" (the matching stat). The points left are
+// their own line ("Оставшиеся очки 2", StatLabel), spoken on the screen and when
+// they change; repeated in every row they made each step long (player 2026-11-20).
 A.AttrValue = function(c) {
-    var CR = _global.CharacterRecord;
     var v = String(c.m_nAttributeData);
     if (c.m_sMatchingStatName != undefined && c.m_sMatchingStatName != "")
         v += ", " + A.StripTags(c.m_sMatchingStatName) + " " + c.m_sMatchingStatData;
-    if (CR.IsAttributeSpendingEnabled() || CR.HasCurrentCharSpentPoints()) {
-        var left = (_global.CreatureUtils != undefined) ? _global.CreatureUtils.GetCharacterAttributePoints() : "?";
-        v += ", свободных очков " + left;
-    }
     return v;
 };
 
 A.Kind = function(c) {
     if (c._name.indexOf("DragArea") >= 0) return "";  // chargen model rotation area
+    if (c.m_oAbility != undefined && A.OtherTree(c)) return "skip";
     // Inventory, store and container items (SharedLibrary.Item): ObjectID, Name,
     // DoubleClickAction (equip / use / take). Equipment slots (EquipSlot).
     if (c.ObjectID != undefined && c.Name != undefined && typeof(c.DoubleClickAction) == "function") return "item";
@@ -258,6 +465,12 @@ A.Line = function(c, kind) {
     // Tooltip text of icon-only buttons (Behaviour.DisplayTooltip.TooltipSource).
     if (label == "" && typeof(c.TooltipSource) == "string") label = A.Clean(c.TooltipSource);
     if (label == "" && typeof(c.m_sClassName) == "string") label = A.StripTags(c.m_sClassName);  // DA2 ability tree
+    // Icon buttons whose text is set but never shown (SharedLibrary.ButtonBase keeps
+    // it in m_oButtonProperties.ButtonText): DA2 journal sections NavIco1-3 read
+    // "без подписи" (log 2026-11-20 22:08, journal.gfx InitializeTopLevelNavigation).
+    if (label == "" && typeof(c.GetButtonText) == "function") label = A.StripTags(c.GetButtonText());
+    var coreStat = A.IsCoreStat(c);
+    if (coreStat) label = A.CoreStatName(c);
     // Character creation icons (CharGenButton): the choice's name on its target,
     // as text or as a talk-table string id resolved by the game's own lookup.
     if (label == "" && c.oTarget != undefined) {
@@ -378,6 +591,7 @@ A.Line = function(c, kind) {
         }
         value = at + "|" + c.Token;
     }
+    if (coreStat) value = A.TextOf(c.RollOver_mc.StatNum_mc);
     if (label == "" && typeof(c.sName) == "string") label = A.StripTags(c.sName);
     // Party portraits (DA2 characterrecord / inventory SharedLibrary.Portrait, token
     // Party.Members.N set by GUIPortraits.MakePortraitInitFunction): a picture only,
@@ -394,10 +608,17 @@ A.Line = function(c, kind) {
     if (label.indexOf("<") >= 0) label = A.StripTags(label);
     // Skill, talent and spell icons (SharedLibrary.AbilityIcon in an AbilityChain):
     // the ability object hangs on the icon as m_oAbility.
+    var tree = "";
     if (c.m_oAbility != undefined) {
         kind = "ability";
         label = A.AbilityName(c.m_oAbility);
         value = A.AbilityState(c.m_oAbility);
+        tree = A.TreeField(c);
+    }
+    // DA2 tree button: how many of its abilities can be learned now.
+    if (kind == "button" && c.m_mcChainContainer != undefined && c.m_nGUIType != undefined) {
+        var tl = A.TreeLearnable(c);
+        value = (tl > 0) ? "можно изучить " + tl : "";
     }
     // World map pins (worldmap.gfx SharedLibrary.MapPinIcon): the name alone (the
     // tooltip text joined name and description), the pin's state and marks.
@@ -440,7 +661,7 @@ A.Line = function(c, kind) {
     if (c.List != undefined && c.ListItemIndex != undefined && !isNaN(A.ListCount(c.List)))
         lp = A.ListPos(c) + "/" + A.ListCount(c.List);
     return targetPath(c) + "\t" + kind + "\t" + label + "\t" + value + "\t" +
-        Math.round(p.x) + "\t" + Math.round(p.y) + "\t" + en + "\t" + lp + "\n";
+        Math.round(p.x) + "\t" + Math.round(p.y) + "\t" + en + "\t" + lp + "\t" + tree + "\n";
 };
 
 // Scrolls the OptimizedList of the row at path so that entry number index is on
@@ -526,10 +747,39 @@ A.Paragraphs = function(raw) {
     return out;
 };
 
+// A short text with line breaks, one sentence per line: the ability requirements
+// ran together ("Требуется: Ур. 8 Требуется: Могучий удар", log 2026-11-20 22:02:29).
+A.JoinLines = function(raw) {
+    var paras = A.Paragraphs(raw);
+    if (paras.length < 2) return A.Clean(raw);
+    var out = "";
+    var i = 0;
+    var p;
+    var last;
+    while (i < paras.length) {
+        p = paras[i];
+        last = p.charAt(p.length - 1);
+        if (i < paras.length - 1 && ".!?:;,…".indexOf(last) < 0) p += ".";
+        out += (out == "" ? "" : " ") + p;
+        i++;
+    }
+    return out;
+};
+
+// Captions the agent folds into the number they name (StatLabel), so they are not
+// read on their own: DA2 characterrecord.gfx PointsRemaining_mc, abilities.gfx
+// AvailablePointsHeader_mc / AvailableSpecPointsHeader_mc.
+A.IsFoldedCaption = function(n) {
+    return n == "PointsRemaining_mc" || n == "AvailablePointsHeader_mc" || n == "AvailableSpecPointsHeader_mc";
+};
+
 A.TextLine = function(mc, k, tf) {
     if (tf._visible == false || tf._alpha == 0) return "";
     if (tf.type != "input" && A.IsButtonLabel(mc)) return "";
+    if (tf.type != "input" && A.IsFoldedCaption(mc._name)) return "";
     var t = A.Clean(tf.text);
+    if (tf.type != "input" && t.length < A.paraMin && (tf.text.indexOf("\n") >= 0 || tf.text.indexOf("\r") >= 0))
+        t = A.JoinLines(tf.text);
     // The same TextField under two member names (codex description: TextField and
     // m_mcTextField) was listed and spoken twice (tester log 2026-11-20 18:32).
     if (tf.type != "input" && t != "") {
@@ -644,6 +894,7 @@ A.Walk = function(mc, depth, skip, inList) {
 A.Scan = function() {
     A.seen = new Object();
     A.seenText = new Object();
+    A.treeCache = new Object();
     A.offscreen = 0;
     return A.Walk(_level0, 0, "", false);
 };
@@ -653,6 +904,7 @@ A.Scan = function() {
 A.ScanUnder = function(path) {
     A.seen = new Object();
     A.seenText = new Object();
+    A.treeCache = new Object();
     A.offscreen = 0;
     var c = eval(path);
     if (c == undefined || c._visible != true || c._alpha <= 0) return "";
@@ -1309,6 +1561,13 @@ A.StatLabel = function(n) {
     if (n == "AttackText_mc") return "Атака";
     if (n == "DamageText_mc") return "Урон";
     if (n == "CapacityNumber_mc") return "Рюкзак";
+    // DA2 points left (characterrecord.gfx PointsRemaining_mc caption 6086721;
+    // abilities.gfx AvailablePointsHeader_mc 6207904, AvailableSpecPointsHeader_mc
+    // 6207905). The attribute count was heard as "Ур. 2 Воин, 2": a bare number takes
+    // the text before it (log 2026-11-20 22:02:01).
+    if (n == "AttributePoints_mc") return A.Loc(6086721, "Оставшиеся очки");
+    if (n == "AbilityPoints_mc") return A.Loc(6207904, "Очки способностей");
+    if (n == "SpecPoints_mc") return A.Loc(6207905, "Очки специализации");
     return "";
 };
 

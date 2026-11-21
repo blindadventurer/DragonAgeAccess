@@ -1244,6 +1244,45 @@ Changed (settings, not game files):
   ZoomIn_1 and ZoomOut_1 (were Keyboard::Button_Next / Button_Prior) set to
   (UNASSIGNED) on 2026-11-17. Original kept as KeyBindings.ini.before-daoaccess.
 
+## Puzzle map
+
+Places that are not walk / talk / fight, found 2026-11-20 by listing every
+resource name in every .erf/.rim of the install (tools\listall.py, ERF V2.0 and V3.0 names)
+and reading the flag names of the plot files (.plo, GFF V4.0, UTF-16 strings).
+Plot flags are proven; how each puzzle plays is from memory of the game, a
+HYPOTHESIS until seen in a log or a video. Area codes are .are names.
+
+- Main campaign, mandatory:
+  - Circle Tower Fade, cir300-cir362 (Broken Circle): plt_cir300pt_shapeshifting
+    (forms mouse, spirit, burning man, golem) and plt_cir300pt_fade_portal (islands
+    Raw Fade, Burning Tower, Darkspawn Invasion, Mage Asunder, Templar's Nightmare,
+    Weisshaupt, three green portals, Sloth Demon). The biggest risk: a maze of
+    islands, each passage needs a given form. Needs scanner names for portals,
+    mouse holes, burning doors and a "current form" line.
+  - Gauntlet, urn230ar_the_gauntlet (Urn of Sacred Ashes): riddles in dialogue
+    (RIDDLE_OPEN_RIGHT_DOOR / WRONG_DOOR, wrong answer = a fight), the bridge
+    (plt_urn230pt_bridge: GHOST_TILE_APPEARS, SOLID_TILE_APPEARS, PLAYER_FELL;
+    12 triggers urn230tr_bridge_switch_01-12, urn230ip_bridge_puzzle.dlg,
+    urn230_party_bridge_help.dlg), the fire (EQUIPMENT_REMOVED, PC_PAST_THE_FIRE:
+    take off all gear). The bridge is the second biggest risk.
+  - Haven temple, urn200: plt_urn200pt_brazier (use a pearl or a taper on a
+    brazier): an item use, low risk.
+  - Ortan Thaig, orz530: plt_orz530pt_statpuzzle (3 doors, 3 traps, solved):
+    medium risk, layout unknown.
+- Origin stories (only one runs): Dwarf Noble, bdn210ar_thaig_chamber:
+  plt_bdn210pt_shield_puzzle (3 floor plates, CAN_USE_RING). Dalish Elf,
+  bed110ar_elven_ruins: mirror, pressure plate, statue room (traps, low risk).
+- Awakening: Blackmarsh Fade stb200: plt_stb200pt_stone_puzzle (6 stones in a
+  sequence, STB_PUZZLE_SEQUENCE_STONE_1-6_CORRECT): high risk if the order is shown
+  only by visuals. Vigil's Keep deep roads vgk320/vgk330: puzzle pieces a-d, Korth
+  statue, runestone, barrier switch. Wending Wood trp100: 8 statues to find
+  (plt_trp100pt_statues). Silverite mine trp200, Kal'Hirol ltl*: levers.
+- DLC: Golems of Amgarrak (gib: phased creatures, fin switch, levers), Witch Hunt
+  (str: mirror shards, str510 mirror, door switch, statue), Leliana's Song (lel220:
+  three gate levers). Not checked inside yet.
+- Next: the plan is in NOTEBOOK.md, Puzzle plan (prepare from files, check on the
+  spot, Circle Tower Fade first).
+
 ## Pitfalls
 
 What went wrong and how to avoid it.

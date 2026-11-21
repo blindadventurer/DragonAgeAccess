@@ -70,6 +70,10 @@ struct Item {
     bool enabled = true;
     // A row of a scrolling list (OptimizedList): its place in the whole list.
     int listIdx = -1, listTotal = 0;
+    // Dragon Age II ability tree (agent A.TreeField): the chain it belongs to (an
+    // ability and its upgrades), its place in tree order, and the words for its place.
+    std::wstring chain, treeWords;
+    int treeOrder = -1;
 };
 
 enum AgentState { AGENT_NONE, AGENT_LOADING, AGENT_READY, AGENT_FAILED };
@@ -530,6 +534,14 @@ void Scan(void* movie, MovieState& st, DWORD now) {
                 it.listTotal = _wtoi(f[7].substr(sl + 1).c_str());
             }
         }
+        if (f.size() > 8 && !f[8].empty()) {
+            auto t = Split(f[8], L'|');
+            if (t.size() >= 3) {
+                it.chain = t[0];
+                it.treeOrder = _wtoi(t[1].c_str());
+                it.treeWords = t[2];
+            }
+        }
         items.push_back(it);
     }
     // Drop repeated paths (the agent dedupes too).
@@ -573,6 +585,23 @@ void Scan(void* movie, MovieState& st, DWORD now) {
     std::vector<size_t> all(items.size());
     for (size_t i = 0; i < all.size(); ++i) all[i] = i;
     order(all, 0);
+    // Dragon Age II ability trees: the icons of one tree in the agent's tree order
+    // (chain by chain), in the slots the screen order gave them.
+    {
+        std::vector<size_t> slots;
+        for (size_t i = 0; i < ordered.size(); ++i)
+            if (ordered[i].treeOrder >= 0) slots.push_back(i);
+        if (slots.size() > 1) {
+            std::vector<Item> tree;
+            for (size_t i : slots) tree.push_back(ordered[i]);
+            std::stable_sort(tree.begin(), tree.end(), [](const Item& a, const Item& b) {
+                std::wstring ca = a.path.substr(0, a.path.rfind(L'.')), cb = b.path.substr(0, b.path.rfind(L'.'));
+                if (ca != cb) return ca < cb;
+                return a.treeOrder < b.treeOrder;
+            });
+            for (size_t k = 0; k < slots.size(); ++k) ordered[slots[k]] = std::move(tree[k]);
+        }
+    }
     Tidy(st.file, ordered);
     if (st.file == L"PartyPicker") AddPartyCandidates(movie, ordered);
     st.prevCount = st.items.size();
@@ -611,7 +640,10 @@ std::wstring Describe(const MovieState& st, size_t idx) {
     else if (it.kind == L"button" && !it.value.empty()) s += L", " + it.value;  // world map pin state
     else if (it.kind == L"slot") s += L": " + (it.value.empty() ? std::wstring(L"пусто") : it.value);
     else if (it.kind == L"ability")
-        s += it.value == L"have" ? L", изучено" : it.value == L"locked" ? L", требования не выполнены" : L", можно изучить";
+        s += it.value == L"have"       ? L", изучено"
+             : it.value == L"locked"   ? L", требования не выполнены"
+             : it.value == L"nopoints" ? L", не хватает очков"
+                                       : L", можно изучить";
     else if (it.kind == L"spec")
         s += L", специализация" +
              std::wstring(it.value == L"have"     ? L", выбрана"
@@ -903,11 +935,18 @@ std::wstring ChainOf(const std::wstring& path) {
     return d == std::wstring::npos ? path : path.substr(0, d);
 }
 
+// The chain of a skill icon: its parent clip (Origins), or in a Dragon Age II tree
+// the agent's chain inside that clip ("...AbilityChainContainer_mc#3").
+std::wstring ChainKey(const Item& it) {
+    std::wstring c = ChainOf(it.path);
+    return it.chain.empty() ? c : c + L"#" + it.chain;
+}
+
 // The skill icons of one chain, in order.
 std::vector<size_t> ChainItems(const MovieState& st, const std::wstring& chain) {
     std::vector<size_t> v;
     for (size_t i = 0; i < st.items.size(); ++i)
-        if (st.items[i].kind == L"ability" && ChainOf(st.items[i].path) == chain) v.push_back(i);
+        if (st.items[i].kind == L"ability" && ChainKey(st.items[i]) == chain) v.push_back(i);
     return v;
 }
 
@@ -917,7 +956,7 @@ std::vector<std::wstring> SiblingChains(const MovieState& st, const std::wstring
     std::vector<std::wstring> v;
     for (const Item& x : st.items) {
         if (x.kind != L"ability") continue;
-        std::wstring c = ChainOf(x.path);
+        std::wstring c = ChainKey(x);
         if (ChainOf(c) == parent && std::find(v.begin(), v.end(), c) == v.end()) v.push_back(c);
     }
     return v;
@@ -928,8 +967,9 @@ std::wstring PositionSuffix(const MovieState& st, size_t idx) {
     const Item& it = st.items[idx];
     if (it.listTotal > 0 && it.listIdx >= 0)
         return L", " + std::to_wstring(it.listIdx + 1) + L" из " + std::to_wstring(it.listTotal);
+    if (!it.treeWords.empty()) return L", " + it.treeWords;  // "2 из 6, улучшений 2" / "улучшение 1 из 2"
     std::vector<size_t> v;
-    if (it.kind == L"ability") v = ChainItems(st, ChainOf(it.path));
+    if (it.kind == L"ability") v = ChainItems(st, ChainKey(it));
     else if (SectionMode(st.file) && IsWidget(it)) v = SectionNav(st, SectionOf(st, it));
     if (v.size() < 2) return L"";
     size_t p = std::find(v.begin(), v.end(), idx) - v.begin();
@@ -1063,15 +1103,15 @@ void MoveInSection(void* movie, MovieState& st, int dir) {
     const Item& cur = st.items[g_curIndex];
     if (cur.listTotal > 0 && MoveInList(movie, st, cur.listIdx + dir, dir > 0 ? L"down" : L"up")) return;
     if (cur.kind == L"ability") {
-        std::wstring chain = ChainOf(cur.path);
+        std::wstring chain = ChainKey(cur);
         // List screens: every chain of the screen in order, so Down at the end of
         // "Воин" goes on into "Парное оружие" (test 20:09: the player was stuck
         // at the end of a branch and used Tab). Character creation: one block.
         std::vector<std::wstring> chains;
         if (SectionMode(st.file)) {
             for (const Item& x : st.items)
-                if (x.kind == L"ability" && std::find(chains.begin(), chains.end(), ChainOf(x.path)) == chains.end())
-                    chains.push_back(ChainOf(x.path));
+                if (x.kind == L"ability" && std::find(chains.begin(), chains.end(), ChainKey(x)) == chains.end())
+                    chains.push_back(ChainKey(x));
         } else {
             chains = SiblingChains(st, chain);
         }
@@ -1096,7 +1136,9 @@ void MoveInSection(void* movie, MovieState& st, int dir) {
         size_t t = dir > 0 ? c + 1 : c - 1;  // wraps to a huge value below 0
         if (c < chains.size() && t < chains.size()) {
             auto there = ChainItems(st, chains[t]);
-            size_t to = there[std::min(k, there.size() - 1)];
+            // Dragon Age II tree: Up/Down go from ability to ability (the first of
+            // each chain); its upgrades are reached with Right.
+            size_t to = cur.chain.empty() ? there[std::min(k, there.size() - 1)] : there.front();
             std::wstring oldSec = SectionOf(st, cur), newSec = SectionOf(st, st.items[to]);
             bool crossed = SectionMode(st.file) && newSec != oldSec;
             if (crossed) Speak(newSec, true);  // entering another branch: its name first
@@ -1126,14 +1168,51 @@ void MoveInSection(void* movie, MovieState& st, int dir) {
 
 // Left/Right on a skill icon: along its chain (the skill and its upgrades).
 void MoveInChain(void* movie, const MovieState& st, int dir) {
-    auto here = ChainItems(st, ChainOf(st.items[g_curIndex].path));
+    auto here = ChainItems(st, ChainKey(st.items[g_curIndex]));
     size_t k = std::find(here.begin(), here.end(), g_curIndex) - here.begin();
     if (k >= here.size()) return;
+    if (here.size() == 1 && !st.items[g_curIndex].chain.empty()) {
+        Speak(L"Улучшений нет", true);
+        return;
+    }
     if ((dir > 0 && k + 1 >= here.size()) || (dir < 0 && k == 0)) {
         Speak(dir > 0 ? L"Конец цепочки" : L"Начало цепочки", true);
         return;
     }
     MoveTo(movie, st, here[dir > 0 ? k + 1 : k - 1], dir > 0 ? L"chain-right" : L"chain-left");
+}
+
+// The first skill icon to land on: in a Dragon Age II tree the first one that can be
+// learned now (the player had to hunt for them, 2026-11-20), else the first one.
+size_t FirstAbility(const MovieState& st) {
+    size_t any = SIZE_MAX;
+    for (size_t i = 0; i < st.items.size(); ++i) {
+        if (st.items[i].kind != L"ability") continue;
+        if (any == SIZE_MAX) any = i;
+        if (!st.items[i].chain.empty() && st.items[i].value == L"avail") return i;
+    }
+    return any;
+}
+
+// Ctrl+Down / Ctrl+Up in a Dragon Age II tree: the next / previous ability that can
+// be learned now.
+void JumpLearnable(void* movie, const MovieState& st, int dir) {
+    size_t n = st.items.size();
+    size_t found = SIZE_MAX, count = 0;
+    for (size_t step = 1; step < n; ++step) {
+        size_t i = (g_curIndex + n + (dir > 0 ? step : n - step)) % n;
+        const Item& x = st.items[i];
+        if (x.kind != L"ability" || x.chain.empty() || x.value != L"avail") continue;
+        if (found == SIZE_MAX) found = i;
+        ++count;
+    }
+    bool here = st.items[g_curIndex].value == L"avail";
+    LogLine(L"learnable jump " + std::to_wstring(dir) + L" -> " + (found == SIZE_MAX ? L"none" : st.items[found].path));
+    if (found == SIZE_MAX) {
+        Speak(here ? L"Другого, что можно изучить, нет" : L"В этой ветке сейчас нечего изучить", true);
+        return;
+    }
+    MoveTo(movie, st, found, dir > 0 ? L"learnable-next" : L"learnable-prev");
 }
 
 // A new screen, or a new scene in the same movie: texts above the first widget
@@ -1167,13 +1246,30 @@ void AnnounceScreen(void* movie, const MovieState& st, const wchar_t* why) {
         if (vo != L"1" && !line.empty()) Speak(line, spoken++ == 0);
     }
     // Skills screen: start on the first skill.
-    if (st.file == L"abilities")
-        for (size_t i = 0; i < st.items.size(); ++i)
-            if (st.items[i].kind == L"ability") { first = i; break; }
+    if (st.file == L"abilities" && FirstAbility(st) != SIZE_MAX) first = FirstAbility(st);
     bool sections = SectionMode(st.file);
     if (sections) g_sectionMemory.clear();
+    // Dragon Age II level-up: after one character's abilities are confirmed the game
+    // opens the next character's attributes, and the screen was announced before its
+    // name was drawn ("3, Оставшиеся очки..." for Бетани, log 2026-11-20 22:03:06).
+    // Say whose screen it is when no text above the first widget names them.
+    bool levelUp = st.file == L"CharacterRecord" || st.file == L"abilities";
+    if (levelUp) {
+        std::wstring who;
+        GfxCall(movie, "DAOAccess.Val", {"GUI.SelectedChar.Name"}, &who);
+        bool named = who.empty();
+        for (size_t i = 0; i < st.items.size() && i < first && !named; ++i)
+            if (!IsWidget(st.items[i]) && st.items[i].label.find(who) != std::wstring::npos) named = true;
+        if (!named) {
+            LogLine(L"screen who " + who);
+            Speak(who, spoken++ == 0);
+        }
+    }
     for (size_t i = 0; i < st.items.size(); ++i) {
-        if (IsWidget(st.items[i]) || (!popup && i >= first)) continue;
+        // Points left lie below the first widget on the abilities screen (abilities.gfx
+        // AbilityPoints_mc, SpecPoints_mc) and were never heard there.
+        bool points = levelUp && !IsWidget(st.items[i]) && st.items[i].path.find(L"Points_mc") != std::wstring::npos;
+        if (IsWidget(st.items[i]) || (!popup && i >= first && !points)) continue;
         // List screens: only the titles here; each section reads its own texts.
         if (sections && SectionOf(st, st.items[i]) != L"Прочее") continue;
         LogLine(L"screen text " + st.items[i].label);
@@ -1188,6 +1284,11 @@ void AnnounceScreen(void* movie, const MovieState& st, const wchar_t* why) {
     if (sections && !s_hinted) {
         s_hinted = true;
         Speak(L"Разделы: стрелки влево и вправо", false);
+    }
+    static bool s_treeHinted = false;  // Dragon Age II tree keys, once per game session
+    if (!s_treeHinted && first < st.items.size() && !st.items[first].chain.empty()) {
+        s_treeHinted = true;
+        Speak(L"Вверх и вниз: способности, вправо: их улучшения, Ctrl со стрелками: то, что можно изучить", false);
     }
 }
 
@@ -1299,8 +1400,8 @@ void RunActive(void* movie, MovieState& st, DWORD now) {
         // points left first ("Умения, 1").
         if (g_announceAt != 0 && (int)(now - g_announceAt) < 3000 &&
             (st.file == L"LevelUp" || st.file == L"abilities") && st.items[idx].kind != L"ability") {
-            for (size_t i = 0; i < st.items.size(); ++i) {
-                if (st.items[i].kind != L"ability") continue;
+            size_t i = FirstAbility(st);
+            if (i != SIZE_MAX) {
                 g_announceAt = 0;
                 bool first = true;
                 for (const Item& x : st.items)
@@ -1383,7 +1484,9 @@ void RunActive(void* movie, MovieState& st, DWORD now) {
         switch (k) {
         case K_UP:
         case K_DOWN:
-            if (SectionMode(st.file) || cur.kind == L"ability") MoveInSection(movie, st, k == K_DOWN ? 1 : -1);
+            if (cur.kind == L"ability" && !cur.chain.empty() && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+                JumpLearnable(movie, st, k == K_DOWN ? 1 : -1);
+            else if (SectionMode(st.file) || cur.kind == L"ability") MoveInSection(movie, st, k == K_DOWN ? 1 : -1);
             else if (k == K_UP) MoveTo(movie, st, g_curIndex > 0 ? g_curIndex - 1 : 0, L"up");
             else MoveTo(movie, st, g_curIndex + 1 < n ? g_curIndex + 1 : n - 1, L"down");
             break;
