@@ -38,6 +38,13 @@ games\da2\NOTEBOOK.md (Dragon Age II).
 
 ## Status
 
+- 2026-11-21, release v0.3.1 (player asked whether everything was pushed for the
+  testers, then chose commit, push and a new release): commit 1e254b2 (agent v37
+  and v38, menu.cpp), DAOAccess-0.3.1.zip (SHA-256 ca627cd7...3ebe),
+  DA2Access-0.3.1.zip (224f6bc1...3a86), installer 1.4 rebuilt (884efef8...7927),
+  normal release, title "0.3.1 (тестовая версия)". Proven the same evening:
+  releases/latest redirects to v0.3.1 and the three downloaded assets match these
+  hashes. Released while v37/v38 are still NOT tested in a game (as with 0.3.0).
 - 2026-11-20 late: agent v38 (Dragon Age II ability trees in chains, see
   games\da2\NOTEBOOK.md test log) deployed to both games on top of v37, NOT tested.
 - 2026-11-20 ~22:40: agent v37 and menu.cpp built for both games and deployed to
