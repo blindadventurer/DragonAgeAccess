@@ -45,7 +45,8 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   Origins Fixes v9-v11 and the engine object list. Deployed to both games the same
   evening. DAOAccess-0.4.0.zip (SHA-256 836a6036...e1f6), DA2Access-0.4.0.zip
   (ce853da5...bdd8), installer 1.4 rebuilt (8a895f12...9645), normal release, title
-  "0.4.0 (тестовая версия)". Released while v41 and Fixes v11 are NOT tested in a game, and the shared
+  "0.4.0 (тестовая версия)", commit ea2831c. Proven the same evening: releases/latest
+  redirects to v0.4.0 and the three downloaded assets match these hashes. Released while v41 and Fixes v11 are NOT tested in a game, and the shared
   v39/v40 changes NOT tested in Dragon Age II.
 - 2026-11-22: player asked for links to the most popular content and improvement
   mods of both games (no UI, no textures), to download and then install with
