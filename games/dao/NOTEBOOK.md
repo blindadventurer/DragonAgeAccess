@@ -364,11 +364,105 @@ Status is one of: to do, in progress, done, blocked (with the reason).
     (ico_mm_store) gives the person within 10 m ", торговец" and goes. Lothering
     18:51 before: Объекты 44 (crates, herbs, the church door "Церковь", "Убежище
     Дейна", body bags "Разбойник", "Мабари"), Места 1 ("Купец"), Выходы 1.
-  - Object walk (19:35): EnumObjects goes on until 30000 free ids in a row
-    (was 4000). A save loaded inside the chantry (test 19:24) has the party at
-    ids 130..7330 and the chantry's people at 16927..17018: the walk stopped
-    before them and the scanner listed only the party and the exit. Raw dumps
-    now wait 5 s after an area change.
+  - Object source (2026-11-22, player's choice "Сканер из списка игры"):
+    EnumObjects (games\dao\src\objects.cpp) takes the ids from the engine's own
+    object manager (hash map, Proven facts "Object manager") and reads each one
+    through the proven lookup 0xA58190; the old id walk (1 upward until 30000
+    free ids in a row; 4000 had missed the Lothering chantry's people at
+    16927..17018, 8000 the Ostagar darkspawn) is only the fallback, used when the
+    code bytes differ (log "engine object list code differs") or the list cannot
+    be read ("engine object list unreadable"). Until proven, once a minute both
+    run and the log compares them: "objects: list N ids, M read in X ms; walk K
+    in Y ms; only in list: ... | only in walk: ...". PROVEN in test 2026-11-22
+    15:54-16:25 (Ostagar): "engine object list on", 10 comparisons, list and
+    walk read the same objects every time (814..978), "only in" both empty.
+    NEXT: drop the once-a-minute walk comparison. Raw dumps wait 5 s after an
+    area change.
+  - Fixes v9 (player's report 2026-11-22 on the play of 2026-11-21 22:14 - 03:21,
+    causes read in that log; player chose "all in one build"; agent v39, built
+    and deployed 2026-11-22 14:50 together with the object source above, NOT
+    tested):
+    - Shock never cast (key 4 20+ times 02:24-02:28, no "выберите цель", Enter
+      attacked): Shock (ABI_base 14000, TargetType 126, AOE_Type 2 cone) enters
+      the game's targeting state and waits for a mouse click (Proven facts,
+      Ability targeting). Now the quickbar poll also reads that state
+      (PendingAbility, 0xC35FA0) and says "Шок: выберите цель, Enter на враге";
+      Enter on a creature while an ability waits casts it through the game's own
+      click code (CastPendingOn: valid-target check 0x70D550, then 0x711680),
+      else at the creature's place; speech "Шок: <target>, N%" or "Нельзя
+      применить на эту цель". Log "cast pending: ability A on id I mode M -> r".
+      Dragon Age II: stubs (returns 0), unchanged behaviour.
+      Test 2026-11-22 16:19-16:25 FAILED: "выберите цель" was spoken, but all 24
+      Enter presses gave "cast pending ... mode 1A9D0090 (the combat mode) -> -1"
+      (a fault caught by __try), the ability stayed pending; Shock 14000,
+      Lightning 14001 and 200254 alike; the player heard "Нельзя применить на эту
+      цель". Fixes v10 (built 16:36, NOT deployed): read again, the handler
+      0x711A00 takes its object with 0x5D5BE0([0xC06794]) and passes target
+      [obj+0x10] (0x53CC40 on obj+4) to 0x711680, not the id. The creature case
+      now sets 0xC06794 = id, calls mode->0x711A00 itself (bytes checked) and puts
+      0xC06794 back; -4 if the ability is still pending afterwards ("Игра не
+      приняла цель"). A fault now logs "step S; fault CODE at ADDR, stack <exe
+      return addresses>" and says "Сбой мода при применении". GameModeCombat
+      derives from GameModeExplore at offset 0 (RTTI, so the explore functions
+      are valid on it). The cause of the v9 fault is unknown (HYPOTHESIS: the raw
+      id instead of [obj+0x10]). Fixes v10 deployed 16:43 (player's OK) and
+      PROVEN 2026-11-22 17:30: "cast pending: ability 14000 on id 4448 (combat)
+      -> 1 step 6", "Шок: Гарлок, 100%", floaty "Шок", the Hurlock 60% then 28%
+      and killed; Lightning 14001 the same ("Молния: Гарлок, 72%" -> 44%). Left:
+      0.2 s after the cast the quickbar poll still said "Шок: выберите цель,
+      Enter на враге" once; fixed in scanner.cpp (g_castValue: the cast ability
+      is not "pending" for 1.5 s), built 2026-11-22, NOT deployed (game running).
+      The player confirmed "шок работает" the same day. Frida could
+      not attach to this game (TransportError timeout at 17:28, twice), not
+      needed in the end.
+    - Enemies missing from Враги: (1) the "Не получается достать" clocks stop
+      while Client.Paused (agent Combat 7th field) or when polls are over 2 s
+      apart (menus); a marked enemy within 5 m is unmarked ("combat reachable
+      again"); before, spiders 1731, 1724, 1727 were marked while the player
+      paused (02:28:07) and then fought at 2 m, only in Все; (2) at the fight's
+      start every cached hostility answer is aged and in a fight creatures are
+      re-asked every 1.5 s (was 4 s): Часовой 1283 was friendly in the cache at
+      03:06:41 ("Бой!" with no enemy); "Бой!" with no enemy looks again 5 times
+      every 0.7 s and says "Враги: N. Ближайший: ..." (log "combat enemies
+      late"); (3) a quest target or giver that is a live hostile creature gets
+      Entry::foe: listed in Враги, "враг, цель задания «...», X" (the Sloth demon,
+      quest:320, was only in Задания).
+    - "Предметы получены" now says "Получено: X, Y, 2 шт." from the backpack and
+      plot item lists' NewlyAcquired items (agent NewItems), each item id once per
+      session, at most 6 then "и ещё N"; the alert's text when none is found. Log
+      "items alert: lists <sizes>; new: id:name xN...; told K". DISPROVED in test
+      2026-11-22 16:25:06 and 16:25:12 (herbs Корень смерти, Полевой цветок):
+      "lists 0 0", only "Предметы получены" spoken; the game showed the name as a
+      style 0 floaty only for the second one. Fixes v11 (player chose "item
+      names first", built 2026-11-22, NOT deployed, NOT tested): a hook on the
+      game's own item-added handler (Proven facts, Received items): every item
+      the party gets is logged "item added: "<name>" xN" and queued; the alert
+      says "Получено: X, Y, 2 шт." from the items of the last 4 s (log "items
+      alert: hook N items, told K"), else the agent lists, else the alert text.
+      Startup log: "objects: mode capture ... items=on". HYPOTHESIS: the name is
+      already set when the handler runs, and StackSize +0x5FC holds the count.
+      Same build: no "выберите цель" for 1.5 s after the mod cast an ability.
+    - Placeables say their state or verb after the name (scanner, from act=):
+      doors "закрыта / открыта / заперта" (gates plural), others "заперто",
+      "открыть", "использовать", "только осмотреть", "ловушка, обезвредить"...;
+      exits and loot say nothing more (locked loot: "заперто"). Enter says
+      "Открываю / Закрываю / Обыскиваю / Использую / Осматриваю / Переход: X" and
+      "Заперто, пробую открыть: X" for a locked one (was silent: "Вторая дверь",
+      7 presses). Counts in that play: doors closed 15, open 20, locked 6; Use 4;
+      Examine 21; Loot 54; transitions 6.
+    - Ambient lines (player 2026-11-22: subtitles of people talking among
+      themselves, or somewhere else, are not read; conversations are): they are
+      FloatyLayer floating texts (Proven facts, Floating texts), which the mod
+      only scanned for the pause sign. Agent v40 wraps
+      FloatyLayer.DisplayFloatyMessage and DisplayStatusMessage (queue in
+      FloatyLayer.__daoaccessQ); menu.cpp SpeakFloaties speaks styles 3, 0, 4 and
+      the status line, queued, the same text once in 4 s; hit numbers (1, 2) and
+      texts without letters only logged. Log "floaty style S id N "text"". The
+      speaker is not named (the message floaty's id is not proven to be a
+      creature id). Deployed 2026-11-22 15:31 with everything above. PROVEN in
+      test 2026-11-22 15:55: 17 ambient lines (style 3, the Ostagar priest's
+      sermon, the soldiers) and 52 style 0 texts ("Оглушен!", talents) spoken;
+      one "floaty: no FloatyLayer class" was a movie without that layer.
 - Party selection v1 (2026-11-18 ~20:00, adding proven 21:37, see test log; player: only "Удалить все"
   and "Принять" readable): the PartyPicker screen now starts with one item per
   candidate from the game mode's own list: "Морриган, уровень 6, в отряде /
@@ -578,6 +672,82 @@ Each decision with its reason, so it is not reopened by accident.
 ## Proven facts
 
 Each fact with how it was proven (file and line, log line, in-game test).
+
+- Object manager (2026-11-22, disassembly of games\dao\work\DAOrigins.unpacked.exe with
+  capstone, scratch script; also named in the Ghidra project DragonAgeAccess.gpr):
+  GetObjectManager 0x4C5380 = mov eax,[0xC2BE24]; ret. LookupObjectById 0xA58190
+  calls ObjMgr_FindAndAddRef 0x4D5EB0(id, 1) on it, which finds through 0x8170B0
+  -> IdHashMap_LowerBound 0x6FE370 and adds a reference (value vtable slot 2 via
+  0x4D5950); 0xA58190 releases it again (0x4D68B0). The manager begins with a
+  Visual C++ 2008 stdext::hash_map: list +4 (head node pointer +8, size +0xC),
+  buckets +0x14..+0x18 (8 bytes each), mask +0x20, bucket limit +0x24. Node: +0
+  next, +4 prev, +8 key (object id, compared unsigned), +0xC value.
+  ObjMgr_CollectAllObjects 0x4D5F00 walks this list from [m+8] to the head again
+  and pushes every value's vtable slot 0x18 result into a vector: so the list is
+  the full set the lookup knows. Reading it in the running game: NOT yet proven
+  (first test pending, see Stages, Scanner, Object source).
+
+- Ability targeting (2026-11-22, static: Ghidra headless tools\ghidra_cli.py and
+  capstone on games\dao\work\DAOrigins.unpacked.exe, handlers from
+  games\dao\tools\handlers.py, table ABI_base.gda of packages\core\data\2da.erf
+  through g2da.py; named in DragonAgeAccess.gpr as GME_*). quickbar.gfx
+  QuickBarAbilityIcon.OnButtonAction sends GameModeController.PerformAbility
+  (ability, caster, source item). GameModeExplore handlers: PerformAbilityMessage
+  0x711B50, ...OnTargetUnderCursor 0x7116C0, ...OnSelectedTarget 0x711A00,
+  ...OnPlayer 0x711940, CancelAbilityTargeting 0x711AC0 (GameModeGUI has its own
+  PerformAbility 0x718110). 0x711B50 reads ability columns by CRC32 name
+  (0xA2CCC0(1, id, hash, &out)): TargetType 0x0F642429, UseType 0xACEFC4C2,
+  0x1C7CA631 (name unknown: 1 for Lightning, Drain Life, Arcane Bolt, 0 for
+  Shock, Flame Blast), AOE_Type 0x2EB7565C, Range 0x81F2A384. It casts at once
+  for TargetType 1 (self), or on the caster's current attack target when column
+  0x1C7CA631 is 1 (why Lightning "worked" with Enter); else 0x70BA30 enters the
+  targeting state: struct 0xC35F60 (vtable), +0x40 ability (0xC35FA0), +0x44
+  column 0xE1A8F4EA, +0x48 item, +0x4C TargetType mask, +0x50 caster, +0x54
+  mask used with no ability; 0xC35F74 = AOE_Type (2 cone: the ground click is
+  clamped to Range). 0x711A00: mask = 0x70ABE0 (ecx = 0xC35F60), valid =
+  mode->0x70D550(obj, mask) (thiscall ret 8: bits 1 self, 2/4/0x80 creatures
+  by hostility, 0x40 dead, 8 placeable, 0x10 type 12), then
+  mode->0x711680(ability, caster, item, target id, &vec3 zero) (thiscall ret 0x14)
+  = 0x7F6690 cast + 0x7113F0 leave targeting. 0x7116C0 on the ground passes
+  target -1 and the picked point. ABI_base rows: 14000 SHOCK TargetType 126
+  Range 2 AOE_Type 2 (35, 10), 10001 FLAME_BLAST the same, 14001 LIGHTNING
+  TargetType 4 AOE 0. Calling these from the mod: NOT yet proven in a game
+  (Fixes v9).
+- Received items (2026-11-22, static: Ghidra MCP and capstone on
+  games\dao\work\DAOrigins.unpacked.exe; named in DragonAgeAccess.gpr): class
+  Alert (RTTI .?AVAlert@@), constructor Alert_ctor 0x627DD0, alloc 0x180, type
+  attribute at alert+0x58 (types seen: 1, 2, 3 items, 4, 5, 6, 7, 8, 9, 10, 0xB,
+  0xC). Alerts_AddItemsReceived 0x629620 (type 3, once until shown) is called
+  only by CCParty_OnItemAdded 0x6313A0 = slot 7 of CCParty's secondary vtable
+  0xB05DBC (thiscall, ret 4, argument = the item object; skips the alert when
+  byte 0xC371B4 has bit 2 or 4; sets NewlyAcquired unless bit 0x40). Item
+  attributes (CCItem_RegisterAttributes 0x7546F0, name then lea ecx,[edi+off]):
+  MaterialType 0x4FC, MaterialProgression 0x50C, Description 0x51C, SizeX 0x550,
+  SizeY 0x560, Icon 0x570, EquippableSlots 0x598, Cost 0x5A8, StoreFlag 0x5C0,
+  DefaultAmmo 0x5D0, Damaged 0x5E0, StackSize 0x5F0, StackingGroupID 0x600,
+  Unique 0x610, NewlyAcquired 0x620, Irremovable 0x630, Indestructible 0x640,
+  InfiniteStock 0x650, AbilityID 0x660 (the handler skips its last step for
+  AbilityID 200000), Properties 0x680, PropertyPowers 0x69C, RuneSlots 0x4BC,
+  RuneSlotMask 0x4D8; an attribute's value is at +0xC (0x53CC40). CCObject
+  (0x699670) registers Tag +0x78, Name +0xD4, WorldPositionX +0x88, Y +0x98,
+  WorldOrientationY +0xA8, MapNoteVisible +0x25C. Hooked in Fixes v11: NOT yet
+  proven in a game.
+- Floating texts (floatylayer.gfx, FFDec 2026-11-22: FloatyLayer.as,
+  FloatyMessage.as): the engine fills FloatyLayer.BatchUpdateMessageIDs / Strings /
+  Styles / Colours / Durations and ProcessBatchMessageFloaties calls
+  DisplayFloatyMessage(floatyID, text, style, colour, duration) for each; styles
+  (FloatyMessage): 0 default, 1 hit, 2 critical hit, 3 ambient dialog, 4
+  description. Floaties are created by id (BatchCreateIDs, symbol 1 = message);
+  their relation to object ids: unknown. DisplayStatusMessage(text, colour) feeds
+  StatusMessageRoller. DragonAge.ini [GameOptions] SubtitlesLevel=2 on the
+  player's PC.
+- Inventory lists (inventory.gfx patch003, FFDec 2026-11-22): PlayerItemList
+  lists GUIInventory.PartyBackpackView and GUIInventory.PartyPlotItemsView;
+  entry N's item token is <list>.N.Item (ItemEntry.TokenName) with ID, Name,
+  StackSize, NewlyAcquired (SharedLibrary.Item); viewing it sends
+  GUIInventory.ClearNewlyAcquiredFlag <ID>. An items alert (Type 3,
+  Party.Alerts.3) holds only WasUber, IntegerArg, ObjectID 4294967295, Type and
+  empty quest fields (log 2026-11-22 00:07:22).
 
 - Store (since 2026-11-20): Steam app 47810, appmanifest_47810.acf in
   F:\SteamLibrary\steamapps (installdir "Dragon Age Ultimate Edition", buildid
@@ -1292,6 +1462,16 @@ What went wrong and how to avoid it.
 
 ## Backlog (not urgent)
 
+- Found in the log of 2026-11-21/22 (test log), offered to the player 2026-11-22,
+  not chosen yet:
+  - item tooltips (describe, inventory and containers) run name, type and
+    properties together: "Серебряное кольцоКольцо", "Клобук ученикаМатерчатый
+    шлем  +5 к психической устойчивости" (14 of 31 describe lines);
+  - the achievement popup GUIAchievementUnlocked reads "без подписи" (radio item
+    _level0.Achievement_mc.AchievementWindow_mc);
+  - chargen appearance: slider arrows ...SliderGroup_mc.subentry_mN.ArrowDown_mc
+    read "без подписи".
+
 - Menu opening delay (player, 2026-11-17: about a second on every menu). Log:
   movie new -> screen took 2 s (identity check waited 1 s, agent readiness
   checked 1 s after loadMovie). Fixed 23:00, proven in test 23:30: identity checked
@@ -1575,3 +1755,28 @@ One line per in-game test: date, what was tested, result.
   the list jumped before the tabs and Up stuck on its first row (20 presses), the
   codex text was spoken twice and could only be heard again from the start, and
   "Пауза снята" / "Пауза" every 1-4 s while paused. Fixed in agent v35.
+- 2026-11-21 00:20-00:41 (player, Steam, release 0.3.1 agent v38): end of the city
+  elf origin (Эльфинаж, Лавка Аларита, Дом). Worked; the achievement popup read
+  "без подписи" (Backlog).
+- 2026-11-21 22:14 - 2026-11-22 02:59 (player, Steam, agent v38, log read by
+  Claude 2026-11-22): new mage character, chargen, the Harrowing in the Fade, the
+  Circle Tower (Комнаты учеников, Комнаты старших магов, Пещерные кладовые,
+  Башня магов, подвал). No crash, memory up to 2115 of 4095 MB. Worked: fights
+  with spells (quickbar, "Атакую", kills, "Бой окончен"), walk then use on chests
+  and bodies, Take all, quests, codex alerts, conversations, level-up with the
+  ability chains of agent v38 ("Начало цепочки"; the shared v37/v38 change works
+  in Origins too). Problems in Backlog (2026-11-21/22): joined item tooltips,
+  unlabeled achievement and chargen arrows, the silent locked door "Вторая дверь"
+  (walks behind it stopped at 20 m, "Остановился"). The player's own report of
+  this play (2026-11-22): Shock never worked, enemies dropped out of Враги when
+  fights began (Sloth demon only in Задания), received items unnamed, door state
+  and what can be used unclear; causes and fixes in Stages, Scanner, Fixes v9.
+- 2026-11-22 15:54-16:25 (player, Steam, agent v40, Fixes v9 and the engine
+  object list; log read by Claude): Ostagar, the Korcari Wilds fights (wolves,
+  genlocks, hurlocks). No crash, memory up to 2240 of 4095 MB, 4 stalls (area
+  loads). Worked: the engine object list, "Бой! Врагов рядом: N" at each fight,
+  ambient lines and floating texts, "Обыскиваю: X", herbs picked after a walk.
+  Failed: Shock and every aimed ability (fault -1, player heard "Нельзя применить
+  на эту цель"), received item names (lists empty). Fixes v10 built for both.
+- 2026-11-22 17:28-17:31 (player, Steam, Fixes v10): Shock and Lightning cast
+  with Enter on a Hurlock in combat, both hit (cast pending -> 1). PASSED.

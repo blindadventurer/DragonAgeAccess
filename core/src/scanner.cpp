@@ -61,6 +61,10 @@ struct Entry {
     unsigned short act0 = 0, act1 = 0;  // placeables: the game's two actions now
     double x = 0, y = 0;
     bool hpKnown = true;  // creatures: the catalogue gives a health total
+    // A catalogue entry (quest target, quest giver) that is a live hostile creature:
+    // it belongs in Враги too (test 2026-11-21 23:46: the Sloth demon was quest:320
+    // and could only be attacked from Задания).
+    bool foe = false;
     int count = 1;        // > 1: a folded group of this many with the same name (nearest kept)
     std::wstring Key() const {
         if (count > 1) return kind + L":g:" + name;
@@ -108,6 +112,17 @@ std::unordered_set<unsigned> g_unreachable;  // enemies an attack could not reac
 // Creatures seen not in play in this area (RawObject::inPlay), to log when one wakes.
 std::unordered_set<unsigned> g_dormantSeen;
 constexpr DWORD kCreatureNameMs = 4000;
+// In a fight hostility is asked again sooner: creatures that turn hostile as the
+// fight begins (Часовой 1283, test 2026-11-22 03:06:41) kept the cached friendly
+// answer, so "Бой!" came with no enemy and Враги stayed empty for 3 s.
+bool g_inFight = false;  // set by CombatTick
+constexpr DWORD kFightNameMs = 1500;
+DWORD CreatureNameMs() { return g_inFight ? kFightNameMs : kCreatureNameMs; }
+// Every cached creature answer counts as old (fight start).
+void AgeCreatureNames() {
+    DWORD old = GetTickCount() - 100000;
+    for (auto& [id, at] : g_objNamesAt) at = old;
+}
 constexpr double kRecheckRange = 60.0;
 // Last Refresh timing parts (ms), logged when the whole took long.
 double g_tEnum = 0, g_tNames = 0;
@@ -190,7 +205,7 @@ bool InCategory(const Entry& e) {
     // for the rest of the area. Health alone cannot decide it: in the Korcari Wilds
     // (test 23:32) 58 darkspawn had no catalogue health at all.
     if (g_cat == kEnemyCat)
-        return e.kind == L"creature" && e.extra.find(L"враг") != std::wstring::npos &&
+        return ((e.kind == L"creature" && e.extra.find(L"враг") != std::wstring::npos) || e.foe) &&
                !g_unreachable.count((unsigned)_wtoi(e.id.c_str()));
     for (const std::wstring& k : SplitW(kCats[g_cat].kinds, L' '))
         if (k == e.kind) return true;
@@ -331,8 +346,12 @@ void AddEngineObjects(void* movie, const Player& pl, std::vector<Entry>& out) {
         }
     bool flagUsable = live > 0 && unflagged * 10 < live * 8;
     std::wstring hidden;
-    std::unordered_set<std::wstring> known;
-    for (const Entry& e : out) known.insert(e.id);
+    std::unordered_set<std::wstring> known, questKnown;
+    for (const Entry& e : out) {
+        known.insert(e.id);
+        if (e.kind == L"quest" || e.kind == L"giver") questKnown.insert(e.id);
+    }
+    std::unordered_set<unsigned> knownCreatures;  // quest targets / givers that are creatures
     known.insert(pl.id);
     std::vector<Entry> add;
     std::vector<bool> talkable;  // parallel to add: friendly creature with a conversation
@@ -367,7 +386,18 @@ void AddEngineObjects(void* movie, const Player& pl, std::vector<Entry>& out) {
             if (carried) continue;
         }
         std::wstring id = std::to_wstring(o.id);
-        if (known.count(id)) continue;
+        if (known.count(id)) {
+            // A quest target or giver that is a creature keeps its catalogue entry, but
+            // its hostility is asked like any creature's (the Sloth demon, see Entry::foe).
+            if (kind == L"creature" && questKnown.count(id)) {
+                knownCreatures.insert(o.id);
+                bool stale = !g_objNames.count(o.id) ||
+                             (std::hypot(o.x - pl.x, o.y - pl.y) <= kRecheckRange &&
+                              (int)(GetTickCount() - g_objNamesAt[o.id]) > (int)CreatureNameMs());
+                if (stale) ask += (ask.empty() ? L"" : L",") + id;
+            }
+            continue;
+        }
         Entry e;
         e.kind = kind;
         e.id = id;
@@ -393,7 +423,7 @@ void AddEngineObjects(void* movie, const Player& pl, std::vector<Entry>& out) {
         // every key press was suspected in the lag report of 2026-11-18.
         bool stale = !g_objNames.count(o.id) ||
                      (kind == L"creature" && std::hypot(o.x - pl.x, o.y - pl.y) <= kRecheckRange &&
-                      (int)(GetTickCount() - g_objNamesAt[o.id]) > (int)kCreatureNameMs);
+                      (int)(GetTickCount() - g_objNamesAt[o.id]) > (int)CreatureNameMs());
         if (stale) ask += (ask.empty() ? L"" : L",") + id;
     }
     if (!ask.empty()) {
@@ -417,6 +447,15 @@ void AddEngineObjects(void* movie, const Player& pl, std::vector<Entry>& out) {
             g_objNames[(unsigned)_wtoi(ids[i].c_str())] = name;
             g_objNamesAt[(unsigned)_wtoi(ids[i].c_str())] = GetTickCount();
         }
+    }
+    for (Entry& e : out) {
+        unsigned uid = (unsigned)_wtoi(e.id.c_str());
+        if ((e.kind != L"quest" && e.kind != L"giver") || !knownCreatures.count(uid)) continue;
+        const std::wstring& n = g_objNames[uid];
+        size_t bar = n.find(L'|');
+        e.foe = bar != std::wstring::npos && n.find(L"враг", bar) != std::wstring::npos &&
+                n.find(L"мёртв", bar) == std::wstring::npos;
+        if (e.foe) e.hpKnown = g_objHp[uid] > 0;
     }
     std::wstring slept, contra;
     size_t nSlept = 0;
@@ -678,6 +717,58 @@ std::wstring KindWord(const Entry& e) {
     return L"";
 }
 
+// What the game would do with a placeable now (its two actions, ids of
+// placeable_interactions.gda, see PlaceableKind): the door's state or the verb,
+// spoken after the name. Test 2026-11-21/22: doors 1 Open (closed) 15 times, 2
+// Close (open) 20, 3 Unlock (locked) 6; 5 Use (altar, portal, lyrium vein); 6
+// Examine (bookcases, books, statues). Exits (15) and loot (11) say it by kind.
+bool HasAct(const Entry& e, unsigned short a) { return e.act0 == a || e.act1 == a; }
+
+bool DoorLike(const Entry& e) {
+    std::wstring low = Lower(e.name + L" " + e.tag);
+    return low.find(L"двер") != std::wstring::npos || low.find(L"door") != std::wstring::npos ||
+           low.find(L"ворот") != std::wstring::npos || low.find(L"gate") != std::wstring::npos ||
+           low.find(L"решетк") != std::wstring::npos || low.find(L"решётк") != std::wstring::npos;
+}
+
+std::wstring ActState(const Entry& e) {
+    std::wstring k = e.kind == L"mention" ? e.origin : e.kind;
+    if (k != L"object" && k != L"exit" && k != L"loot") return L"";
+    if (!e.act0 && !e.act1) return L"";
+    // Gates ("Ворота") are plural; other doors and bars feminine; the rest neuter.
+    std::wstring low = Lower(e.name);
+    bool door = DoorLike(e);
+    bool plural = low.find(L"ворот") != std::wstring::npos;
+    const wchar_t* end = !door ? L"о" : plural ? L"ы" : L"а";
+    if (HasAct(e, 3)) return std::wstring(L"заперт") + end;
+    if (k == L"loot") return L"";
+    if (door && HasAct(e, 1)) return std::wstring(L"закрыт") + end;
+    if (door && HasAct(e, 2)) return std::wstring(L"открыт") + end;
+    if (HasAct(e, 7)) return L"ловушка, обезвредить";
+    if (HasAct(e, 12)) return L"ловушка";
+    if (HasAct(e, 1)) return L"открыть";
+    if (HasAct(e, 2)) return L"закрыть";
+    if (HasAct(e, 5)) return L"использовать";
+    if (HasAct(e, 10)) return L"поговорить";
+    if (HasAct(e, 4)) return L"разрушить";
+    if (HasAct(e, 13)) return L"опрокинуть";
+    if (HasAct(e, 16) || HasAct(e, 17)) return L"повернуть";
+    if (HasAct(e, 18)) return L"починить";
+    if (HasAct(e, 8)) return L"укрытие";
+    if (HasAct(e, 6)) return L"только осмотреть";
+    return L"";
+}
+
+// The name with the state after its own part: "Дверь, закрыта, возле: Кухня".
+std::wstring NameWithState(const Entry& e) {
+    std::wstring n = e.name.empty() ? std::wstring(L"без имени") : e.name;
+    std::wstring st = ActState(e);
+    if (st.empty()) return n;
+    size_t at = n.find(L", возле:");  // ("near" is a windows.h macro)
+    if (at == std::wstring::npos) return n + L", " + st;
+    return n.substr(0, at) + L", " + st + n.substr(at);
+}
+
 std::wstring DistText(double d) {
     return d < 1.5 ? std::wstring(L"рядом") : std::to_wstring((int)std::lround(d)) + L" м";
 }
@@ -691,7 +782,7 @@ void SpeakEntry(const Player& p, const wchar_t* why) {
     const Entry& e = g_list[g_sel];
     g_selKey = e.Key();
     std::wstring dir = Direction(p, e);
-    std::wstring say = KindWord(e) + (e.name.empty() ? L"без имени" : e.name) +
+    std::wstring say = (e.foe ? L"враг, " : L"") + KindWord(e) + NameWithState(e) +
                        (e.count > 1 ? L", всего " + std::to_wstring(e.count) + L", ближайший" : L"") +
                        (e.extra == L"тело" ? L", тело" : L"") + L", " + DistText(Dist(p, e)) +
                        (dir.empty() ? L"" : L", " + dir) + L", " + std::to_wstring(g_sel + 1) + L" из " +
@@ -804,6 +895,15 @@ bool Refresh(void* movie, DWORD now, Player& p, bool force) {
     }
     double tWorld = NowMs() - t0;
     AddEngineObjects(movie, p, all);
+    // An enemy marked unreachable that stands this close is clearly reachable (test
+    // 2026-11-22 02:29: spiders marked while the game was paused then fought the
+    // player at 2 m and were only in Все).
+    for (const Entry& e : all) {
+        unsigned uid = (unsigned)_wtoi(e.id.c_str());
+        if (!g_unreachable.count(uid) || Dist(p, e) > 5.0) continue;
+        g_unreachable.erase(uid);
+        LogLine(L"combat reachable again: " + e.Key() + L" \"" + e.name + L"\" " + DistText(Dist(p, e)));
+    }
     Dedupe(all);
     LabelDoors(all);
     AddMentions(all);
@@ -1209,6 +1309,10 @@ struct CombatState {
     // kNoHarmMs means the target cannot be reached.
     DWORD attackAt = 0, hpChangeAt = 0;
     double lastThp = -1;
+    // "Бой!" with no enemy yet (they turn hostile or wake a moment later): look
+    // again a few times and say them when they show.
+    int foeRetry = 0;
+    DWORD foeRetryAt = 0;
 } g_cb;
 constexpr DWORD kNoHarmMs = 12000, kNoHarmBlindMs = 45000;
 
@@ -1217,6 +1321,7 @@ struct CombatRead {
     int mode = 0;
     double hp = 0, hpMax = 0, thp = 0, thpMax = 0;
     unsigned ctarget = 0;
+    bool paused = false;  // Client.Paused (agent v39)
 };
 
 CombatRead ReadCombat(void* movie, unsigned id) {
@@ -1232,6 +1337,7 @@ CombatRead ReadCombat(void* movie, unsigned id) {
     r.ctarget = (unsigned)_wtoi(f[3].c_str());
     r.thp = Num(f[4]);
     r.thpMax = Num(f[5]);
+    r.paused = f.size() > 6 && (f[6] == L"1" || f[6] == L"true");
     return r;
 }
 
@@ -1285,27 +1391,61 @@ std::wstring SelectedName();  // the controlled character's name (party section)
 
 void CombatTick(void* movie, DWORD now) {
     if ((int)(now - g_cb.pollAt) < 400) return;
+    DWORD dt = now - g_cb.pollAt;
     g_cb.pollAt = now;
     CombatRead r = ReadCombat(movie, g_cb.target);
     if (!r.ok) return;
     bool in = r.mode == 1;
     if (in && !g_cb.in) {
         g_cb.in = true;
+        g_inFight = true;
+        AgeCreatureNames();
         g_cb.prevCat = g_cat;
         g_cb.target = 0;
         g_cb.attackAt = 0;
+        g_cb.foeRetry = 0;
         g_cb.hpBucket = Bucket(r.hp, r.hpMax);
         g_walking = false;
         Player p;
         std::wstring say = L"Бой!";
-        if (NearestEnemies(movie, now, p) && !g_list.empty())
+        if (NearestEnemies(movie, now, p) && !g_list.empty()) {
             say += L" Врагов рядом: " + std::to_wstring(g_list.size()) + L". Ближайший: " + EnemyBrief(p, g_list[0]);
+        } else {
+            g_cb.foeRetry = 5;
+            g_cb.foeRetryAt = now + 700;
+        }
         LogLine(L"combat start: " + say);
         Speak(say, true);
         return;
     }
+    // Enemies that showed after "Бой!" (only while the player is still in Враги).
+    if (in && g_cb.foeRetry > 0 && (int)(now - g_cb.foeRetryAt) >= 0) {
+        g_cb.foeRetryAt = now + 700;
+        if (g_cat != kEnemyCat) {
+            g_cb.foeRetry = 0;
+        } else {
+            --g_cb.foeRetry;
+            Player p;
+            if (NearestEnemies(movie, now, p) && !g_list.empty()) {
+                g_cb.foeRetry = 0;
+                std::wstring say = L"Враги: " + std::to_wstring(g_list.size()) + L". Ближайший: " + EnemyBrief(p, g_list[0]);
+                LogLine(L"combat enemies late: " + say);
+                Speak(say, true);
+                return;
+            }
+        }
+    }
+    // Paused (the player gives orders in the pause, test 2026-11-22 02:28:07): the
+    // "no harm" clocks stand still, or every target looked unreachable after 12 s.
+    // A long gap between polls is a menu or a conversation: the same.
+    if (in && (r.paused || dt > 2000)) {
+        if (g_cb.attackAt) g_cb.attackAt += dt;
+        g_cb.hpChangeAt += dt;
+    }
     if (!in && g_cb.in) {
         g_cb.in = false;
+        g_inFight = false;
+        g_cb.foeRetry = 0;
         g_cat = g_cb.prevCat;
         g_selKey.clear();
         g_cb.target = 0;
@@ -1447,6 +1587,8 @@ struct Slot {
     bool on = false, pending = false, error = false, warning = false;
 };
 Slot g_slots[10];
+std::wstring g_castValue;  // ability the mod last cast on Enter, and when
+ULONGLONG g_castAt = 0;
 bool g_slotsRead = false;
 DWORD g_slotsPollAt = 0;
 KeyState g_slotKeys[10], g_listKey;
@@ -1500,6 +1642,17 @@ void QuickbarTick(void* movie, DWORD now) {
         s.on = f[2] == L"1";
         s.pending = f[3] == L"1" || f[3] == L"true";
     }
+    // The game's own targeting state (Origins): Shock never showed PendingActivation
+    // (test 2026-11-22 02:24-02:28), but its id sits there while the game waits.
+    unsigned pa = PendingAbility();
+    if (pa)
+        for (int i = 0; i < 10; ++i)
+            if (g_slots[i].value == std::to_wstring(pa)) g_slots[i].pending = true;
+    // Just cast by the mod (CastPendingOn): the game still shows it waiting for a
+    // moment, which said "выберите цель" again (test 2026-11-22 17:30:45).
+    if (!g_castValue.empty() && GetTickCount64() - g_castAt < 1500)
+        for (int i = 0; i < 10; ++i)
+            if (g_slots[i].value == g_castValue) g_slots[i].pending = false;
     if (namesStale) ReadSlotNames(movie);
     if (!g_slotsRead) {  // first read: silent
         g_slotsRead = true;
@@ -1946,6 +2099,44 @@ void ScannerTick(void* movie, DWORD now, bool menuOpen) {
         GfxCall(movie, "DAOAccess.Val", {"GUI.SelectedChar.InCombat"}, &inCombat);
         if (inCombat.empty()) GfxCall(movie, "DAOAccess.Val", {"Party.Leader.InCombat"}, &inCombat);
         bool fighting = inCombat == L"1" || g_cb.in;
+        // An ability the game waits to aim (Shock: its key starts the game's own
+        // targeting, which only a mouse click ends): cast it on this creature as that
+        // click would (objects.h CastPendingOn). The game walks into range itself.
+        bool being = e.foe || e.kind == L"creature" || e.kind == L"person" || e.kind == L"extra" ||
+                     e.kind == L"party" || e.origin == L"person";
+        if (being && PendingAbility() != 0) {
+            unsigned ability = 0;
+            int c = CastPendingOn(id, fighting, &ability);
+            if (c > 0) {
+                std::wstring an;
+                for (int i = 0; i < 10; ++i)
+                    if (g_slots[i].value == std::to_wstring(ability)) an = g_slots[i].name;
+                for (int i = 0; i < 10; ++i) g_slots[i].pending = false;
+                g_castValue = std::to_wstring(ability);
+                g_castAt = GetTickCount64();
+                if (an.empty()) an = L"Умение";
+                if (e.foe || e.extra.find(L"враг") != std::wstring::npos) {
+                    if (id != g_cb.target) SetTarget(id, e.name);
+                    if (!g_cb.attackAt) g_cb.attackAt = now;
+                }
+                CombatRead r = ReadCombat(movie, id);
+                int tp = Pct(r.thp, r.thpMax);
+                Speak(an + L": " + e.name + (tp >= 0 ? L", " + std::to_wstring(tp) + L"%" : L"") +
+                          (c == 3 ? L", по месту" : L""),
+                      true);
+                g_walking = false;
+                return;
+            }
+            if (c == -3) {
+                Speak(L"Нельзя применить на эту цель: " + e.name, true);
+                return;
+            }
+            if (c < 0) {
+                Speak(c == -4 ? L"Игра не приняла цель: " + e.name : L"Сбой мода при применении, записан в журнал",
+                      true);
+                return;
+            }
+        }
         // Far away and not fighting: walk there, act on arrival (kUseFar).
         if (!fighting && Dist(p, e) > kUseFar) {
             LogLine(L"use " + e.Key() + L" \"" + e.name + L"\" far (" + DistText(Dist(p, e)) + L"): walk first");
@@ -1984,7 +2175,17 @@ void ScannerTick(void* movie, DWORD now, bool menuOpen) {
             }
             g_walking = false;
         } else if (action > 0) {
-                Speak(L"Действие: " + e.name, true);
+            // The verb from the placeable's own action (a locked door was silent:
+            // "Вторая дверь", 7 presses, test 2026-11-22 00:4x).
+            std::wstring verb = L"Действие: ";
+            if (HasAct(e, 3)) verb = L"Заперто, пробую открыть: ";
+            else if (HasAct(e, 1)) verb = L"Открываю: ";
+            else if (HasAct(e, 2)) verb = L"Закрываю: ";
+            else if (HasAct(e, 11)) verb = L"Обыскиваю: ";
+            else if (HasAct(e, 5)) verb = L"Использую: ";
+            else if (HasAct(e, 6)) verb = L"Осматриваю: ";
+            else if (HasAct(e, 15)) verb = L"Переход: ";
+            Speak(verb + e.name, true);
             g_walking = false;
         } else if (action == 0) {
             Speak(L"Нет действия. Иду к объекту", true);

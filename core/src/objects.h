@@ -61,6 +61,15 @@ std::string ObjectClass(void* obj);
 std::wstring ObjectName(void* obj);
 std::wstring ObjectTag(void* obj);
 
+// Items the party received lately (Origins: a hook on the game's own item-added
+// handler), oldest first, at most maxAgeMs old; taken out of the queue. Empty in a
+// game without the hook.
+struct ReceivedItem {
+    std::wstring name;
+    int count = 1;
+};
+std::vector<ReceivedItem> TakeReceivedItems(unsigned maxAgeMs);
+
 // Captured mode instances (nullptr until the mode ran a virtual call).
 void* ExploreMode();
 void* CombatMode();
@@ -84,3 +93,12 @@ std::string PartyToggle(unsigned id);
 // (0 = none, 3 talk, 4 attack, 8 use), or a negative value on failure. inCombat
 // picks the combat mode instance. Game thread only.
 int InteractWith(unsigned id, bool inCombat);
+
+// The ability the game waits to aim (its targeting state after a quickbar key, e.g.
+// Shock); 0 when none or unknown in this game. Game thread only.
+unsigned PendingAbility();
+// Casts that pending ability on the object, as a click on it would (else at its
+// place, for abilities aimed at the ground). Returns 1 cast on it, 3 cast at its
+// place, 0 nothing pending, -3 not a valid target, -4 the game kept it waiting,
+// -1 fault (logged); ability = the ability id.
+int CastPendingOn(unsigned id, bool inCombat, unsigned* ability);

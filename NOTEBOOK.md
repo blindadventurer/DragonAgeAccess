@@ -38,6 +38,38 @@ games\da2\NOTEBOOK.md (Dragon Age II).
 
 ## Status
 
+- 2026-11-22 late, release v0.4.0 (player: fix the Dragon Age II level-up, then a
+  release with all new changes; chose "release at once" over testing first): agent
+  v41 (Dragon Age II attribute values, ability upgrades in their chains, tree opens on
+  a learnable ability; games\da2\NOTEBOOK.md test log 2026-11-22 20:38) on top of the
+  Origins Fixes v9-v11 and the engine object list. Deployed to both games the same
+  evening. DAOAccess-0.4.0.zip (SHA-256 836a6036...e1f6), DA2Access-0.4.0.zip
+  (ce853da5...bdd8), installer 1.4 rebuilt (8a895f12...9645), normal release, title
+  "0.4.0 (тестовая версия)". Released while v41 and Fixes v11 are NOT tested in a game, and the shared
+  v39/v40 changes NOT tested in Dragon Age II.
+- 2026-11-22: player asked for links to the most popular content and improvement
+  mods of both games (no UI, no textures), to download and then install with
+  Claude: MODS.md (Nexus API v2 GraphQL, top 320 per game by endorsements, name
+  filter op WILDCARD finds Russian translations). Not installed yet. Install one
+  group at a time and check the access mod after each (gfx overrides, Russian
+  text in override\enpy against Qwinn's Fixpack, party picker with Extra Dog
+  Slot, autowalk with Faster Runspeed).
+- 2026-11-22 evening: Origins Fixes v11 deployed with the player's OK, NOT tested: names of received
+  items through a hook on the game's item-added handler, no repeated "выберите
+  цель" after a cast (games\dao\NOTEBOOK.md, Fixes v9). Shared change: objects.h
+  TakeReceivedItems (Dragon Age II stub returns nothing), menu.cpp items alert.
+- 2026-11-22 17:30: Origins Fixes v10 deployed and PROVEN, not committed: Shock
+  and other aimed abilities go through the game's own click handler (test
+  16:19-16:25: the v9 route faulted every time; 17:30 Shock and Lightning hit;
+  games\dao\NOTEBOOK.md, Stages, Scanner, Fixes v9 and v10). The engine object list, Враги at a fight's start,
+  object verbs and floating texts of Fixes v9 work in that test. Shared code
+  changed since 0.3.1 (scanner.cpp, menu.cpp, objects.h, agent v40): Dragon Age
+  II built but not deployed; check there when next played: "Предметы получены"
+  (falls back to the alert's text if its lists differ), Враги at a fight's
+  start, the pause stopping "Не получается достать", object states (act= is
+  Origins-only, so likely silent there), floating texts (log "floaty: no
+  FloatyLayer class" if its layer differs).
+
 - 2026-11-21, release v0.3.1 (player asked whether everything was pushed for the
   testers, then chose commit, push and a new release): commit 1e254b2 (agent v37
   and v38, menu.cpp), DAOAccess-0.3.1.zip (SHA-256 ca627cd7...3ebe),
@@ -143,6 +175,69 @@ games\da2\NOTEBOOK.md (Dragon Age II).
   test of the installer with NVDA and of both games. After it passes: archive
   blindadventurer/DragonAgeOriginsAccess and blindadventurer/DragonAge2Access with a
   link to the new repository (README note, then gh repo archive).
+
+## Reverse-engineering tools (since 2026-11-22)
+
+- Ghidra through the MCP server "ghidra": this project's own Ghidra project is
+  C:\tools\ghidra-projects\DragonAgeAccess.gpr (player's rule: one Ghidra project
+  per access project, global CLAUDE.md). Holds since 2026-11-22 the Origins exe
+  games\dao\work\DAOrigins.unpacked.exe (the Steamless copy, code readable), as
+  program "/DAOrigins.unpacked.exe-531cd1"; functions named so far: the object
+  manager ones (games\dao\NOTEBOOK.md, Proven facts, Object manager). Its first
+  analysis takes several minutes in the background. Dragon Age II has no readable
+  copy on disk (EA wrapper), so its decrypted image must first be dumped from the
+  running game.
+- Ghidra without the MCP server: tools\ghidra_cli.py (2026-11-22), run with
+  C:\tools\mcp\ghidra\Scripts\python.exe: str (strings and their users), dec
+  (decompile), callers, rename (saved in the project). About a minute a call.
+  Proven 2026-11-22 (Shock research). Needed when the MCP server cannot open the
+  project: 2026-11-22 13:35 this session's server failed (CONNECTION_CLOSED)
+  because another Claude session of this project, started 13:10, still held
+  DragonAgeAccess.gpr through its own pyghidra-mcp; with the player's OK that
+  server (pyghidra-mcp and its python children) was stopped. A session cannot
+  reconnect a user-config MCP server itself; a new session gets it again.
+- Quick disassembly without Ghidra: Python capstone (pip --user, 2026-11-22) with
+  pefile on the unpacked exe, a few lines in the scratchpad (map VA - ImageBase
+  with pe.get_data).
+- Frida 17.27 (MCP server "frida" and the Python package): proven 2026-11-22 to see
+  the running DAOrigins.exe (process list only, no attach yet). Attaching to the
+  player's running game needs their OK each time.
+- Ideas offered 2026-11-22: the scanner taking the engine's own object list
+  instead of walking ids with gaps (CHOSEN by the player the same day; Origins
+  built and deployed, NOT tested, games\dao\NOTEBOOK.md Stages, Scanner, Object
+  source; Dragon Age II would need its own proof in its own exe); the game's
+  pathfinder for "reachable / metres by path"; the decrypted Dragon Age II dump.
+- SafetyHook 0.7.0 with Zydis bundled, in lib\safetyhook (SOURCE.md there: source,
+  sha256, licenses BSL-1.0 and MIT). Gives what our hand-made vtable patches cannot:
+  hooks on ordinary (non-virtual) game functions and mid-function hooks that read
+  and change registers; installs with the game's other threads frozen. NOT used by
+  the mod yet (player's choice 2026-11-22: prepare now, adopt when a feature needs a
+  non-virtual function; working vtable hooks stay). Proven 2026-11-22: a test
+  program (inline hook + mid hook on its own function) built with our MSVC and
+  passed in both x86 and x64; both mods also build with /std:c++latest (only the
+  old Prism warning C4309, same as with C++17). To adopt: build.ps1 to
+  /std:c++latest, add lib\safetyhook\safetyhook.cpp, compile Zydis.c as C (cl /c /TC
+  /I lib\safetyhook), ship both license files. Untested risk (HYPOTHESIS): whether
+  the EA wrapper of Dragon Age II checks its code for changes; the first inline hook
+  there needs one in-game test.
+- Dragon Age: Inquisition (asked 2026-11-22, not installed on this PC, web sources
+  only): Frostbite 3, 64-bit exe, Denuvo at launch (licence text, 2014 news), EA app
+  needed. Modding: Frosty Tool Suite (assets, reads Frostbite's own type info);
+  FBTools (IDA plugin naming typeinfo and vtables). No screen-reader mod found.
+  Our route would still fit: an injected 64-bit DLL, SafetyHook x64, Ghidra, Frida;
+  the unknowns are whether Denuvo is still in the current build and how hard it
+  makes reading the code.
+- Other games for the same work (asked 2026-11-22, web sources): BioWare's Eclipse
+  engine ran only Origins, Awakening and Dragon Age II (Lycium = the DA2 branch).
+  Awakening is in the player's Origins install (addins\dao_prc_ep_1) and runs in
+  the same DAOrigins.exe: HYPOTHESIS that the Origins mod already works there,
+  never tested; its new areas, items and dialogues are the things to check.
+  Older BioWare engines: Odyssey (KOTOR 1 and 2, Jade Empire base) and Aurora
+  (Neverwinter Nights). KOTOR 1 already has a blind mod, Voice of the Old Republic
+  (github.com/JeanStiletto/voice-of-the-old-republic, uses Prism too); none found
+  for KOTOR 2 or Mass Effect. What carries over to other games is the method and
+  tools (injected DLL, Prism, Ghidra, Frida, SafetyHook) and, for games with
+  Scaleform GFx AS2 menus, the Flash agent idea; game code does not.
 
 ## Puzzle plan (idea, 2026-11-20, not started)
 
@@ -331,6 +426,12 @@ player (the question was left open):
 
 - Bash heredocs here lose backslashes inside Python string literals; write such
   scripts to a file with the Write tool and run them from there.
+- python -I ignores PYTHONIOENCODING and the user site-packages (capstone is
+  installed there): use python -I -X utf8 for logs with Russian text, plain python
+  for capstone scripts. Never name a scratch script like a standard module (dis.py
+  broke capstone's import of inspect, 2026-11-22).
+- windows.h defines near and far as macros: a C++ variable named near fails with
+  C2513 (scanner.cpp, 2026-11-22).
 - The mod logs every spoken line and every item it reads: anything private shown
   or typed on screen ends up in the log unless it goes through SpeakPrivate and
   the masked item line. 2026-11-20 13:05 an EA password typed into the e-mail box

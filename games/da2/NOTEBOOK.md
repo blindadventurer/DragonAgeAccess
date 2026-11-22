@@ -509,6 +509,12 @@ What went wrong and how to avoid it.
 
 ## Open questions
 
+- Crash in level-up 2026-11-22 20:41:24 (test log): C0000005 at 0x776650 (game code,
+  null +4 read) under ActionScript frames, 3 s after the abilities movie closed, the
+  player on Бетани's attributes. Whether the agent's scan (portrait tokens,
+  ExternalCommands reads) triggered it is unknown. If it happens again: note the
+  screen; reading 0x776650 needs a decrypted dump of the running exe (Frida).
+
 - Crash on exit 20:03:28 (C0000005 in ntdll at 77DA8F56, after the game log's
   "Shutdown - Utilities"): the player closed the game from chargen. The exit at
   21:42 (from the in-game menu) logged no crash. Watch further exits.
@@ -664,3 +670,29 @@ One line per in-game test: date, what was tested, result.
   to ability, Right to its upgrades, Ctrl+Up/Down to the next learnable; a tree
   opens on its first learnable ability). Built and deployed to both games 2026-11-20
   late (player approved), NOT tested.
+- 2026-11-22 20:38-20:41 (player, build Nov 20 22:33, agent v38): level-up of
+  Гаррет (attributes, abilities, confirmed) and Бетани's attributes. Player: "ужасный
+  интерфейс прокачки, цепочки вообще не читаются, характеристики показывают ерунду".
+  Proven working: attribute list 1-6 of 6, Right / Left add and take back, "Оставшиеся
+  очки N" after each change, tree buttons "Оружие и щит, можно изучить 1, 1 из 7",
+  Enter learned "Могучий удар", Подтвердить moved on to Бетани with her name. Causes
+  found in the log and the FFDec exports: (1) attribute rows read only the matching
+  stat ("Сила, 3", "Сила воли, 105"; the adjust result had "14, Устойчивость к магии
+  4%"): AttributesEntry has RollOver_mc.StatNum_mc (the matching stat number,
+  AttributesEntry.StatNum_mc_init), so A.IsCoreStat took the row for a core stat and
+  replaced its value; (2) chains: A.TreeOf put each upgrade in its ability's chain,
+  then its last loop visited the upgrade again as a chain of its own (done[] was set
+  only for chain heads), overwriting its place: the shield tree read "1 из 11" with
+  the four upgrades (Толчок, Стена щитов, Череда, Раскидывание) as chains 8-11, and
+  Right on "Щитовая оборона, улучшений 1" said "Улучшений нет"; (3) Enter on a tree
+  button left the cursor on whatever icon took the button's index ("item replaced",
+  Щитовая оборона, not learnable). Fixed in agent v41 (IsCoreStat skips attribute
+  rows; upgrades marked done) and menu.cpp (a tree button that goes away opens the
+  tree on FirstAbility, "tree-open", keys hint once). Built and deployed to both
+  games 2026-11-22 evening, released in v0.4.0, NOT tested. Check: rows "Сила, 14,
+  Стойкость 3, 1 из 6"; shield tree "1 из 7", Right from Щитовая оборона to "Стена
+  щитов, улучшение 1 из 1"; Enter on a tree lands on a learnable ability.
+  Crash 20:41:24 (C0000005 at 0x776650 reading 0x4, game code under GFx ActionScript
+  frames 0x93..-0x99.. in the stack) 3 s after the abilities and Quickbar movies
+  closed, while on Бетани's attributes, with no key pressed and nothing spoken since
+  20:41:21. Cause unknown (Open questions).

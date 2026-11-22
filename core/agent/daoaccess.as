@@ -12,7 +12,7 @@
 //   button  : any clip with SimulateButtonPush, or a plain onRelease handler
 
 var A = new Object();
-A.ver = 38;  // 38: DA2 ability trees in chains (ability, then its upgrades), learnable counts; 37: DA2 level-up and journal labels (stats, points, nav icons), only the open ability tree, short multi-line texts by sentence; 36: DA2 list rows by NumEntries and VisibleListIndex; 35: codex names, long texts by paragraph, money alerts, pause state; 34: button labels not listed twice, DA2 ability trees; 33: DA2 attribute rows
+A.ver = 41;  // 41: DA2 attribute rows read their own value, upgrades kept in their ability's chain; 40: floating texts (ambient dialogue, messages over heads, status line); 39: pause in Combat, NewItems (names of received items); 38: DA2 ability trees in chains (ability, then its upgrades), learnable counts; 37: DA2 level-up and journal labels (stats, points, nav icons), only the open ability tree, short multi-line texts by sentence; 36: DA2 list rows by NumEntries and VisibleListIndex; 35: codex names, long texts by paragraph, money alerts, pause state; 34: button labels not listed twice, DA2 ability trees; 33: DA2 attribute rows
 _global.DAOAccess = A;
 
 A.Clean = function(s) {
@@ -245,7 +245,12 @@ A.TreeOf = function(cc) {
         if (u != undefined) {
             u.sort(A.ByTreePos);
             var q = 0;
-            while (q < u.length) { ch.push(u[q]); q++; }
+            // An upgrade placed in its ability's chain is done too: before agent v41
+            // the last loop below gave each upgrade a second chain of its own, which
+            // overwrote its place, so Right said "Улучшений нет" and the upgrades
+            // came last as separate abilities ("Стена щитов, 9 из 11", log
+            // 2026-11-22 20:40).
+            while (q < u.length) { ch.push(u[q]); done[String(u[q].m_oAbility.nID)] = true; q++; }
         }
         chains.push(ch);
         var k = kids[id];
@@ -313,6 +318,10 @@ A.TreeLearnable = function(t) {
 // the name is in TextLeft_mc, the number in RollOver_mc.StatNum_mc; read before as
 // the bare number ("7", "69", log 2026-11-20 22:02:17).
 A.IsCoreStat = function(c) {
+    // Attribute rows (AttributesEntry) carry a StatNum_mc too, holding the matching
+    // stat's number: taken for a core stat, "Сила" read "3" (Стойкость) instead of
+    // "14, Стойкость 3" (log 2026-11-22 20:38). They are spins (A.AttrValue).
+    if (A.IsAttrRow(c)) return false;
     return c.RollOver_mc.StatNum_mc != undefined && typeof(c.SimulateButtonPush) == "function";
 };
 
@@ -925,6 +934,46 @@ A.PauseLine = function() {
     return "_level0.PauseIndicator_mc\ttext\t" + t + "\t\t0\t0\t1\n";
 };
 
+// Floating texts of FloatyLayer (floatylayer.gfx FloatyLayer.as, FloatyMessage.as):
+// the engine fills FloatyLayer.BatchUpdateMessage* arrays and ProcessBatchMessageFloaties
+// hands each one to FloatyLayer.DisplayFloatyMessage(floatyID, text, style, colour,
+// duration); style 3 (FloatyMessage.MESSAGE_STYLE_AMBIENT_DIALOG) is the lines people
+// say to each other outside conversations, 0 default and 4 description texts over
+// objects, 1 / 2 hit numbers. FloatyLayer.DisplayStatusMessage(text, colour) is the
+// status line (StatusMessageRoller). The agent wraps both (static functions are
+// looked up by name at each call) and keeps what they showed until FloatyTake, in
+// FL.__daoaccessQ: an agent reloaded into the same movie finds hook and queue there.
+A.FloatyHook = function() {
+    var FL = _global.FloatyLayer;
+    if (FL == undefined || FL.__daoaccessHooked == true) return FL != undefined;
+    if (typeof(FL.DisplayFloatyMessage) != "function") return false;
+    FL.__daoaccessQ = new Array();
+    var origMsg = FL.DisplayFloatyMessage;
+    FL.DisplayFloatyMessage = function(id, msg, style, colour, duration) {
+        if (FL.__daoaccessQ.length < 40)
+            FL.__daoaccessQ.push(style + "\t" + id + "\t" + _global.DAOAccess.StripTags(msg));
+        return origMsg.apply(FL, arguments);
+    };
+    if (typeof(FL.DisplayStatusMessage) == "function") {
+        var origStatus = FL.DisplayStatusMessage;
+        FL.DisplayStatusMessage = function(msg, colour) {
+            if (FL.__daoaccessQ.length < 40) FL.__daoaccessQ.push("s\t0\t" + _global.DAOAccess.StripTags(msg));
+            return origStatus.apply(FL, arguments);
+        };
+    }
+    FL.__daoaccessHooked = true;
+    return true;
+};
+// One line per floating text since the last call: style, floaty id, text. The first
+// call installs the hook; "?" when this movie has no FloatyLayer.
+A.FloatyTake = function() {
+    if (!A.FloatyHook()) return "?";
+    var FL = _global.FloatyLayer;
+    var out = FL.__daoaccessQ.join("\n");
+    FL.__daoaccessQ = new Array();
+    return out;
+};
+
 // A button of a SharedLibrary.Accordion list (ElementButton: knows its container).
 A.IsAccordion = function(c) {
     return c.m_mcElementContainer != undefined && typeof(c.m_mcElementContainer.IsEnabled) == "function" &&
@@ -1275,7 +1324,40 @@ A.Combat = function(id) {
     if (ct == "" || ct == "0") ct = A.Val(me + ".CombatTarget");
     return A.Val("GameModeController.CurrentGameMode") + "\t" + A.Val(me + ".Attributes.7.Current") + "\t" +
         A.Val(me + ".Attributes.7.Total") + "\t" + ct + "\t" +
-        A.Val(t + ".Attributes.7.Current") + "\t" + A.Val(t + ".Attributes.7.Total");
+        A.Val(t + ".Attributes.7.Current") + "\t" + A.Val(t + ".Attributes.7.Total") + "\t" +
+        A.Val("Client.Paused");
+};
+
+// Items the party just got (an items alert, Type 3, carries no names): the
+// backpack and plot item lists of inventory.gfx (PlayerItemList,
+// GUIInventory.PartyBackpackView / PartyPlotItemsView, entries <list>.N.Item) with
+// .NewlyAcquired set (SharedLibrary.Item; cleared when the item is seen in the
+// inventory, GUIInventory.ClearNewlyAcquiredFlag). First line: the two list sizes;
+// then one line per new item: id, name, stack size.
+A.NewItems = function() {
+    var EC = _global.ExternalCommands;
+    if (EC == undefined) return "";
+    var lists = ["GUIInventory.PartyBackpackView", "GUIInventory.PartyPlotItemsView"];
+    var head = "";
+    var out = "";
+    var k = 0;
+    var n;
+    var i;
+    var t;
+    while (k < lists.length) {
+        n = Number(EC.GetNumMembers(lists[k]));
+        if (isNaN(n)) n = 0;
+        head += (k ? "\t" : "") + n;
+        i = 0;
+        while (i < n && i < 500) {
+            t = lists[k] + "." + i + ".Item";
+            if (Number(A.Val(t + ".NewlyAcquired")) != 0)
+                out += A.Val(t + ".ID") + "\t" + A.StripTags(A.Val(t + ".Name")) + "\t" + A.Val(t + ".StackSize") + "\n";
+            i++;
+        }
+        k++;
+    }
+    return head + "\n" + out;
 };
 
 // Party selection (F1..F4, Shift+F1..F4): first line the controlled character

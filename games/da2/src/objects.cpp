@@ -343,3 +343,12 @@ int InteractWith(unsigned id, bool inCombat) {
     LogLine(b);
     return r == 1 ? action : (r == 2 ? 0 : -1);
 }
+
+// The ability targeting state is proven only in Origins (its objects.cpp); Dragon
+// Age II keeps the game's own behaviour until it is found in this exe.
+unsigned PendingAbility() { return 0; }
+std::vector<ReceivedItem> TakeReceivedItems(unsigned) { return {}; }
+int CastPendingOn(unsigned, bool, unsigned* ability) {
+    *ability = 0;
+    return 0;
+}

@@ -491,8 +491,43 @@ void AddPartyCandidates(void* movie, std::vector<Item>& items) {
 #endif
 }
 
+// Floating texts of FloatyLayer (agent FloatyTake): the lines people say to each
+// other outside conversations (style 3; player 2026-11-22: "если персонажи общаются
+// между собой ... субтитры уже не читаются"), texts over objects (0, 4) and the
+// status line ("s"). Hit numbers (1, 2) and texts without letters are left out; the
+// same text again within 4 s is said once (several floaties can show one line).
+void SpeakFloaties(void* movie, DWORD now) {
+    std::wstring txt;
+    if (!GfxCall(movie, "DAOAccess.FloatyTake", {}, &txt) || txt.empty()) return;
+    if (txt == L"?") {
+        static bool s_told = false;
+        if (!s_told) LogLine(L"floaty: no FloatyLayer class in this movie, floating texts not read");
+        s_told = true;
+        return;
+    }
+    static std::unordered_map<std::wstring, DWORD> s_saidAt;
+    for (const std::wstring& line : Split(txt, L'\n')) {
+        auto f = Split(line, L'\t');
+        if (f.size() < 3) continue;
+        const std::wstring& style = f[0];
+        std::wstring text = f[2];
+        for (size_t i = 3; i < f.size(); ++i) text += L" " + f[i];
+        bool letters = false;
+        for (wchar_t c : text) letters = letters || iswalpha(c) || (c >= 0x400 && c <= 0x4FF);
+        bool spoken = letters && style != L"1" && style != L"2";
+        auto it = s_saidAt.find(text);
+        if (spoken && it != s_saidAt.end() && (int)(now - it->second) < 4000) spoken = false;
+        LogLine(L"floaty style " + style + L" id " + f[1] + L" \"" + text + L"\"" + (spoken ? L"" : L" (not spoken)"));
+        if (!spoken) continue;
+        s_saidAt[text] = now;
+        Speak(text, false);
+    }
+    if (s_saidAt.size() > 200) s_saidAt.clear();
+}
+
 void Scan(void* movie, MovieState& st, DWORD now) {
     st.lastScan = now;
+    if (st.file == L"FloatyLayer") SpeakFloaties(movie, now);
     std::wstring txt;
     // HUD movies are never read as screens (PickActive skips them); only the
     // notifications and the pause sign are spoken. Their full scans every 400 ms
@@ -789,18 +824,52 @@ void AnnouncePassive(void* movie, MovieState& st) {
         now.insert(key);
         if (st.passive.count(key) || it.label.empty()) continue;
         LogLine(L"passive " + st.file + L" \"" + it.label + L"\"");
-        Speak(it.label, false);
-        // An items alert (agent value "3|<token>") says only "Предметы получены".
-        // Research: log what its catalogue entry holds, to find the item names.
+        // An items alert (agent value "3|<token>") says only "Предметы получены" and
+        // its catalogue entry holds no names (log 2026-11-22 00:07:22). The names are
+        // the backpack's items marked newly acquired (agent NewItems), each said once.
         if (notif && it.value.compare(0, 2, L"3|") == 0) {
-            std::wstring tree;
-            std::string token = Utf8(it.value.substr(2));
-            if (GfxCall(movie, "DAOAccess.Explore", {token.c_str(), 2.0, 60.0}, &tree)) {
-                std::vector<std::wstring> lines{L"items alert " + it.value.substr(2) + L":"};
-                for (auto& l : Split(tree, L'\n')) if (!l.empty()) lines.push_back(L"  " + l);
-                LogLines(lines);
+            static std::unordered_set<std::wstring> s_said;  // item object ids already told
+            std::wstring txt, names, logged;
+            int count = 0, more = 0;
+            // The game's own item-added handler (Origins hook, objects.h): every
+            // item that came in the last 4 s, equal names merged.
+            {
+                std::vector<ReceivedItem> got = TakeReceivedItems(4000);
+                std::vector<std::pair<std::wstring, int>> merged;
+                for (auto& r : got) {
+                    if (r.name.empty()) continue;
+                    auto m = std::find_if(merged.begin(), merged.end(), [&](auto& x) { return x.first == r.name; });
+                    if (m != merged.end()) m->second += r.count;
+                    else merged.push_back({r.name, r.count});
+                }
+                for (auto& [n, c] : merged) {
+                    if (++count > 6) { ++more; continue; }
+                    names += (names.empty() ? L"" : L", ") + n + (c > 1 ? L", " + std::to_wstring(c) + L" шт." : L"");
+                }
+                LogLine(L"items alert: hook " + std::to_wstring(got.size()) + L" items, told " +
+                        std::to_wstring(count - more));
+            }
+            if (names.empty() && GfxCall(movie, "DAOAccess.NewItems", {}, &txt)) {
+                auto lines = Split(txt, L'\n');
+                for (size_t i = 1; i < lines.size(); ++i) {
+                    auto f = Split(lines[i], L'\t');
+                    if (f.size() < 3 || f[1].empty()) continue;
+                    logged += L" " + f[0] + L":" + f[1] + L"x" + f[2];
+                    if (!s_said.insert(f[0]).second) continue;
+                    if (++count > 6) { ++more; continue; }
+                    int n = _wtoi(f[2].c_str());
+                    names += (names.empty() ? L"" : L", ") + f[1] + (n > 1 ? L", " + std::to_wstring(n) + L" шт." : L"");
+                }
+                LogLine(L"items alert: lists " + (lines.empty() ? std::wstring() : lines[0]) + L"; new:" + logged +
+                        L"; told " + std::to_wstring(count));
+            }
+            if (!names.empty()) {
+                if (more) names += L" и ещё " + std::to_wstring(more);
+                Speak(L"Получено: " + names, false);
+                continue;
             }
         }
+        Speak(it.label, false);
     }
     if (floaty && !st.passive.empty() && now.empty()) {
         LogLine(L"passive FloatyLayer pause off");
@@ -1391,7 +1460,25 @@ void RunActive(void* movie, MovieState& st, DWORD now) {
     if (idx == SIZE_MAX) {
         // Gone (a list closed): its owner if still shown, else the item now there.
         size_t own = FindOwner(st, g_curPath);
-        MoveTo(movie, st, own != SIZE_MAX ? own : std::min(g_curIndex, st.items.size() - 1), L"replaced");
+        // Dragon Age II: Enter on a tree button opens the tree and the button goes;
+        // the cursor took whatever icon now had its index ("Щитовая оборона,
+        // требования не выполнены", log 2026-11-22 20:40:09). Open the tree on its
+        // first learnable ability instead.
+        size_t fa = SIZE_MAX;
+        if (own == SIZE_MAX && st.file == L"abilities" && g_curPath.find(L"AbilityChainContainer_mc") == std::wstring::npos) {
+            fa = FirstAbility(st);
+            if (fa != SIZE_MAX && st.items[fa].chain.empty()) fa = SIZE_MAX;
+        }
+        if (fa != SIZE_MAX) {
+            MoveTo(movie, st, fa, L"tree-open");
+            static bool s_treeKeys = false;  // once per game session
+            if (!s_treeKeys) {
+                s_treeKeys = true;
+                Speak(L"Вверх и вниз: способности, вправо: их улучшения, Ctrl со стрелками: то, что можно изучить", false);
+            }
+        } else {
+            MoveTo(movie, st, own != SIZE_MAX ? own : std::min(g_curIndex, st.items.size() - 1), L"replaced");
+        }
     } else {
         g_curIndex = idx;
         // Level-up skills and talents scene: the scene is announced while it still
